@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { onAuthStateChange, getCurrentDemoUser } from '@/lib/auth'
 import Navbar from '@/components/layout/Navbar'
@@ -124,7 +124,8 @@ interface SupportPlan {
   approvedAt?: Date
 }
 
-export default function SupportPlanPage() {
+// サブコンポーネント: useSearchParams を使用する部分
+function SupportPlanPageContent() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1250,5 +1251,14 @@ export default function SupportPlanPage() {
         )}
       </div>
     </div>
+  )
+}
+
+// メインコンポーネント: Suspense でラップ
+export default function SupportPlanPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SupportPlanPageContent />
+    </Suspense>
   )
 }

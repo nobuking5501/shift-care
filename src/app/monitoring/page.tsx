@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { onAuthStateChange, getCurrentDemoUser } from '@/lib/auth'
 import Navbar from '@/components/layout/Navbar'
@@ -137,7 +137,8 @@ interface MonitoringRecord {
   reviewedAt?: Date
 }
 
-export default function MonitoringPage() {
+// サブコンポーネント: useSearchParams を使用する部分
+function MonitoringPageContent() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1500,5 +1501,14 @@ export default function MonitoringPage() {
         )}
       </div>
     </div>
+  )
+}
+
+// メインコンポーネント: Suspense でラップ
+export default function MonitoringPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <MonitoringPageContent />
+    </Suspense>
   )
 }
