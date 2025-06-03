@@ -1,0 +1,125 @@
+# ClaudeHelper コスト最適化プロンプトテンプレート
+
+## セッション開始時の必須チェック
+```bash
+# セッション追跡開始（必須）
+python save_session.py --start-tracking --session-name "[機能名]_[作業内容]"
+
+# 2時間ごとの自動チェックポイント確認（推奨）
+python save_session.py --check-auto
+```
+
+## コスト削減のための作業指示
+
+### 重要：Taskツール活用でコンテキスト最適化
+
+**開始前に必ず以下を実行してください：**
+
+1. **TodoWriteツールでタスク管理を開始**
+   - 複数ステップの作業は必ずTodoに分割
+   - 進捗に応じてステータス更新
+   - 並行作業可能なタスクは特定
+
+2. **Taskツール優先利用**
+   ```
+   以下の場合は必ずTaskツールを使用：
+   - キーワード検索（"config", "logger"など）
+   - ファイル探索（"どのファイルに○○があるか"）
+   - 複数ファイルにわたる調査
+   - 未知のコードベース探索
+   ```
+
+3. **並列処理でバッチ実行**
+   - 複数の独立したRead/Glob/Grep操作は1回のメッセージで実行
+   - git status, git diff, git logは並列実行
+   - 関連ファイルの同時読み込み
+
+4. **効率的な情報収集パターン**
+   ```
+   悪い例：
+   1. Read fileA.ts
+   2. Read fileB.ts  
+   3. Read fileC.ts
+
+   良い例：
+   1. [Read fileA.ts, Read fileB.ts, Read fileC.ts] を同時実行
+   ```
+
+## 長時間セッション（2時間超）の場合
+
+### 自動チェックポイント活用
+```bash
+# 作業途中で実行（2時間ごと自動実行推奨）
+python save_session.py --check-auto
+
+# 手動チェックポイント
+python save_session.py --checkpoint --session-name "[現在の作業]_中間保存" --summary "進捗状況の要約"
+```
+
+### コンテキスト分割戦略
+1. **機能単位での分割**: 1機能 = 1セッション
+2. **時間単位での分割**: 2時間で必ずチェックポイント
+3. **依存関係の明確化**: 次セッションへの引き継ぎ事項明記
+
+## セッション終了時の必須作業
+
+```bash
+# 最終保存とセッション追跡終了
+python save_session.py --finalize --session-name "[機能名]_完了" --summary "成果物と次のアクション" --tags "completed,機能カテゴリ"
+```
+
+## タグ付けルール（検索効率化）
+
+### 技術分野別
+- `frontend`, `backend`, `database`, `api`, `ui`, `auth`
+- `performance`, `security`, `testing`, `deployment`
+
+### 作業種別
+- `implement`, `fix`, `refactor`, `optimize`, `research`
+- `cost-reduction`, `auto-checkpoint`, `task-optimization`
+
+### 優先度・ステータス
+- `urgent`, `important`, `completed`, `blocked`
+- `cost-critical`, `high-impact`, `quick-win`
+
+## エラー対応時のコスト削減
+
+### エラー発生時
+1. **即座にチェックポイント作成**
+2. **error_recovery.txtテンプレート使用**
+3. **Task tool でエラーパターン検索**
+4. **過去の解決事例を検索活用**
+
+```bash
+# エラー時の検索例
+python search_session.py --keyword "同様のエラーキーワード" --tag "fix,error"
+```
+
+## 実践例
+
+### 新機能実装時
+```
+セッション名: "ユーザー認証_JWT実装"
+1. python save_session.py --start-tracking --session-name "ユーザー認証_JWT実装"
+2. TodoWrite で実装ステップを明確化
+3. Task tool で既存認証コード調査
+4. 2時間後: python save_session.py --check-auto
+5. 完了時: python save_session.py --finalize
+```
+
+### バグ修正時
+```
+セッション名: "シフト表示_日付バグ修正"
+1. 過去の類似バグ検索: search_session.py --keyword "日付" --tag "fix"
+2. Task tool でバグ箇所特定
+3. 修正とテスト
+4. 最終保存時に解決方法を詳細記録
+```
+
+---
+
+**コスト削減効果**
+- 長時間セッション分割: 最大70%コスト削減
+- Task tool活用: 40-60%コンテキスト削減  
+- 並列処理活用: 30-50%時間短縮
+- 過去セッション活用: 類似問題の80%時間短縮
