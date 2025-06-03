@@ -408,7 +408,7 @@ export default function SupportPlanPage() {
       return {
         ...prev,
         [section]: {
-          ...prev[section as keyof SupportPlan],
+          ...(prev[section as keyof SupportPlan] as object),
           [field]: value
         },
         updatedAt: new Date()

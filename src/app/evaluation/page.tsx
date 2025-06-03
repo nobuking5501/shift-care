@@ -234,7 +234,7 @@ export default function EvaluationPage() {
                               </button>
                             ))}
                           </div>
-                          {response?.score > 0 && (
+                          {response?.score && response.score > 0 && (
                             <p className="text-xs text-gray-500 mt-1">
                               {scoreDescriptions[response.score as keyof typeof scoreDescriptions]}
                             </p>

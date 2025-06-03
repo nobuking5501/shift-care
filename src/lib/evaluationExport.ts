@@ -120,7 +120,7 @@ export const exportEvaluationToPDF = async (data: EvaluationExportData): Promise
       currentY -= 5
 
       // 回答スコア
-      const scoreText = response?.score > 0 
+      const scoreText = response?.score && response.score > 0 
         ? `評価: ${response.score} (${scoreDescriptions[response.score as keyof typeof scoreDescriptions]})`
         : '評価: 未回答'
       
@@ -129,7 +129,7 @@ export const exportEvaluationToPDF = async (data: EvaluationExportData): Promise
         y: currentY,
         size: 10,
         font: font,
-        color: response?.score > 0 ? rgb(0, 0.5, 0) : rgb(0.7, 0, 0),
+        color: response?.score && response.score > 0 ? rgb(0, 0.5, 0) : rgb(0.7, 0, 0),
       })
       currentY -= 20
 

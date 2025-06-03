@@ -106,7 +106,7 @@ export function validateStaffInfo(staffData: any): StaffValidationResult {
   }
 
   // 必要な資格の有無チェック
-  const hasWelfareQualification = qualifications.some(q => 
+  const hasWelfareQualification = qualifications.some((q: string) => 
     q.includes('介護福祉士') || 
     q.includes('社会福祉士') || 
     q.includes('精神保健福祉士') ||

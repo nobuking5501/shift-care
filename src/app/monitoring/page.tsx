@@ -374,7 +374,7 @@ export default function MonitoringPage() {
       return {
         ...prev,
         [section]: {
-          ...prev[section as keyof MonitoringRecord],
+          ...(prev[section as keyof MonitoringRecord] as object),
           [field]: value
         },
         updatedAt: new Date()
@@ -390,7 +390,7 @@ export default function MonitoringPage() {
       return {
         ...prev,
         [section]: {
-          ...prev[section as keyof MonitoringRecord],
+          ...(prev[section as keyof MonitoringRecord] as object),
           [subsection]: {
             ...(prev[section as keyof MonitoringRecord] as any)[subsection],
             [field]: value
