@@ -1,23 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Calendar, Users, FileText, BarChart3 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 export default function Home() {
   const router = useRouter()
-
-  useEffect(() => {
-    // Check if user is authenticated
-    const checkAuth = () => {
-      // This will be replaced with actual Firebase auth check
-      const isAuthenticated = false
-      if (!isAuthenticated) {
-        router.push('/login')
-      }
-    }
-    checkAuth()
-  }, [router])
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
