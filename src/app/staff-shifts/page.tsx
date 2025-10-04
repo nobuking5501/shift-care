@@ -124,7 +124,7 @@ export default function StaffShiftsPage() {
         休日希望数: holidayRequests.length,
         シフト読込中: shiftsLoading,
         休日希望読込中: requestsLoading,
-        エラー: shiftsError?.message || 'なし'
+        エラー: (typeof shiftsError === 'string' ? shiftsError : shiftsError?.message) || 'なし'
       },
       認証情報: {
         ユーザーID: safeUser?.id,
