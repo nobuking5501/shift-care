@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   themeColor: '#2563eb',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
   icons: {
+    icon: '/icon-192x192.png',
+    shortcut: '/icon-192x192.png',
     apple: '/icon-192x192.png',
   },
 }
