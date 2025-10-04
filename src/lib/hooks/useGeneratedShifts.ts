@@ -43,7 +43,7 @@ export const useGeneratedShifts = (targetMonth?: string) => {
 
       console.log('Supabaseクエリ結果:', {
         dataLength: data?.length || 0,
-        sampleData: data?.length > 0 ? data[0] : 'no data',
+        sampleData: (data && data.length > 0) ? data[0] : 'no data',
         error: error ? {
           message: error.message,
           code: error.code,
