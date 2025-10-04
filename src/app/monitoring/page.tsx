@@ -196,12 +196,14 @@ function MonitoringPageContent() {
     const unsubscribe = onAuthStateChange((user) => {
       if (user) {
         setUser(user)
-        if (user.role !== 'admin') {
-          router.push('/staff-dashboard')
+        // スタッフもモニタリング機能を利用可能
+        // 管理者とスタッフ以外の場合のみリダイレクト
+        if (user.role !== 'admin' && user.role !== 'staff') {
+          router.push('/')
           return
         }
       } else {
-        router.push('/login')
+        router.push('/')
       }
       setLoading(false)
     })

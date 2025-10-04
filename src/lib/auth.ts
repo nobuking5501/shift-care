@@ -13,9 +13,11 @@ const demoUsers = {
     role: 'admin'
   },
   staff: {
-    uid: 'demo-staff',
-    displayName: 'スタッフ 佐藤',
-    email: 'staff@demo.com',
+    uid: '3',
+    id: '3',
+    displayName: '山田花子（ケアマネジャー）',
+    name: '山田花子（ケアマネジャー）',
+    email: 'yamada@facility.com',
     role: 'staff'
   }
 }

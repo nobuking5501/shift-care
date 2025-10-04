@@ -59,7 +59,7 @@ export default function EvaluationHistoryPage() {
       if (user) {
         setUser(user)
       } else {
-        router.push('/login')
+        router.push('/')
       }
       setLoading(false)
     })

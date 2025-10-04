@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { onAuthStateChange, getCurrentDemoUser } from '@/lib/auth'
 import Navbar from '@/components/layout/Navbar'
 import { ShiftWishEntry } from '@/types'
-import { 
+import { useHolidayRequests } from '@/lib/hooks/useHolidayRequests'
+import {
   Calendar,
   Save,
   ArrowLeft,
@@ -30,13 +31,16 @@ export default function ShiftRequestPage() {
   const [wishes, setWishes] = useState<Record<string, ShiftWishEntry>>({})
   const [globalReason, setGlobalReason] = useState('')
 
+  // Supabase hooks
+  const { createRequest } = useHolidayRequests()
+
   // ユーザー認証
   useEffect(() => {
     const unsubscribe = onAuthStateChange((user) => {
       if (user) {
         setUser(user)
       } else {
-        router.push('/login')
+        router.push('/')
       }
       setLoading(false)
     })
@@ -51,41 +55,25 @@ export default function ShiftRequestPage() {
     setTargetMonth(nextMonth)
   }, [])
 
-  // シフト種別の表示テキスト
-  const getShiftTypeText = (type: string) => {
+  // 休日種別の表示テキスト
+  const getHolidayTypeText = (type: string) => {
     switch (type) {
-      case 'early':
-        return '早番'
-      case 'day':
-        return '日勤'
-      case 'late':
-        return '遅番'
-      case 'night':
-        return '夜勤'
       case 'off':
-        return '公休'
-      case 'any':
-        return 'どれでも'
+        return '休日希望'
+      case 'none':
+        return '希望なし'
       default:
         return '未設定'
     }
   }
 
-  // シフト種別の色
-  const getShiftTypeColor = (type: string) => {
+  // 休日種別の色
+  const getHolidayTypeColor = (type: string) => {
     switch (type) {
-      case 'early':
-        return 'bg-blue-100 text-blue-800 border-blue-300'
-      case 'day':
-        return 'bg-green-100 text-green-800 border-green-300'
-      case 'late':
-        return 'bg-orange-100 text-orange-800 border-orange-300'
-      case 'night':
-        return 'bg-purple-100 text-purple-800 border-purple-300'
       case 'off':
-        return 'bg-gray-100 text-gray-800 border-gray-300'
-      case 'any':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+        return 'bg-red-100 text-red-800 border-red-300'
+      case 'none':
+        return 'bg-gray-50 text-gray-500 border-gray-200'
       default:
         return 'bg-gray-50 text-gray-500 border-gray-200'
     }
@@ -130,6 +118,14 @@ export default function ShiftRequestPage() {
     setTargetMonth(newDate)
   }
 
+  // 日本のタイムゾーンで正確な日付文字列を生成
+  const formatDateToString = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   // カレンダーの日付生成
   const generateCalendarDays = () => {
     const year = targetMonth.getFullYear()
@@ -138,16 +134,16 @@ export default function ShiftRequestPage() {
     const lastDay = new Date(year, month + 1, 0)
     const startDate = new Date(firstDay)
     startDate.setDate(startDate.getDate() - firstDay.getDay())
-    
+
     const days = []
     const currentDateObj = new Date(startDate)
-    
+
     for (let i = 0; i < 42; i++) {
-      const dateStr = currentDateObj.toISOString().split('T')[0]
+      const dateStr = formatDateToString(currentDateObj)
       const isCurrentMonth = currentDateObj.getMonth() === month
       const isWeekend = currentDateObj.getDay() === 0 || currentDateObj.getDay() === 6
       const wish = wishes[dateStr]
-      
+
       days.push({
         date: new Date(currentDateObj),
         dateStr,
@@ -155,10 +151,10 @@ export default function ShiftRequestPage() {
         isCurrentMonth,
         isWeekend
       })
-      
+
       currentDateObj.setDate(currentDateObj.getDate() + 1)
     }
-    
+
     return days
   }
 
@@ -198,7 +194,7 @@ export default function ShiftRequestPage() {
 
   // 提出処理
   const handleSubmit = async () => {
-    const wishList = Object.values(wishes).filter(wish => 
+    const wishList = Object.values(wishes).filter(wish =>
       wish.preferredShift && wish.preferredShift !== 'any' || wish.reason
     )
 
@@ -210,30 +206,46 @@ export default function ShiftRequestPage() {
     setSaving(true)
     try {
       const currentUser = getCurrentDemoUser()
-      const shiftWishData = {
-        userId: currentUser?.id || 'unknown',
-        targetMonth: `${targetMonth.getFullYear()}-${String(targetMonth.getMonth() + 1).padStart(2, '0')}`,
-        wishes: wishList,
-        globalReason,
-        submittedAt: new Date(),
-        status: 'submitted',
-        createdAt: new Date(),
-        updatedAt: new Date()
+
+      // Convert wishes to holiday requests format
+      const holidayRequests = Object.values(wishes)
+        .filter(wish => wish.preferredShift === 'off')
+        .map(wish => ({
+          date: wish.date,
+          reason: wish.reason || '休日希望',
+          priority: wish.priority
+        }))
+
+      if (holidayRequests.length === 0) {
+        alert('休日希望が選択されていません')
+        return
       }
 
-      // デモ用遅延
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
+      // Save to Supabase
+      const holidayRequestData = {
+        staff_name: currentUser?.displayName || '山田花子（ケアマネジャー）',
+        staff_user_id: currentUser?.id || 'demo-staff',
+        requested_dates: holidayRequests.map(req => req.date),
+        reason: globalReason || holidayRequests.map(req => req.reason).join(', '),
+        priority: holidayRequests.some(req => req.priority === 'high') ? 'high' as const :
+                  holidayRequests.some(req => req.priority === 'medium') ? 'medium' as const : 'low' as const,
+        target_month: `${targetMonth.getFullYear()}-${String(targetMonth.getMonth() + 1).padStart(2, '0')}`
+      }
+
+      console.log('Submitting holiday request to Supabase:', holidayRequestData)
+
+      await createRequest(holidayRequestData)
+
       setSaved(true)
-      
+
       // 3秒後にスタッフダッシュボードに戻る
       setTimeout(() => {
         router.push('/staff-dashboard')
       }, 3000)
-      
+
     } catch (error) {
       console.error('シフト希望提出エラー:', error)
-      alert('シフト希望の提出に失敗しました')
+      alert('シフト希望の提出に失敗しました: ' + (error instanceof Error ? error.message : '不明なエラー'))
     } finally {
       setSaving(false)
     }
@@ -259,10 +271,10 @@ export default function ShiftRequestPage() {
         <div className="bg-white rounded-lg shadow-lg p-8 text-center max-w-md mx-4">
           <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-900 mb-2">
-            シフト希望を提出しました
+休日希望を提出しました
           </h2>
           <p className="text-gray-600 mb-4">
-            管理者が確認後、シフト作成に反映されます。
+管理者が確認後、シフト作成時に配慮されます。
           </p>
           <p className="text-sm text-gray-500">
             3秒後にスタッフホームに戻ります...
@@ -288,10 +300,10 @@ export default function ShiftRequestPage() {
             </button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                シフト希望提出
+                休日希望提出
               </h1>
               <p className="text-gray-600">
-                来月のシフト希望を提出してください
+                来月の休日希望を提出してください
               </p>
             </div>
           </div>
@@ -302,7 +314,7 @@ export default function ShiftRequestPage() {
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">
-                {targetMonth.getFullYear()}年 {targetMonth.getMonth() + 1}月のシフト希望
+                {targetMonth.getFullYear()}年 {targetMonth.getMonth() + 1}月の休日希望
               </h2>
               <div className="flex items-center space-x-2">
                 <button
@@ -349,7 +361,7 @@ export default function ShiftRequestPage() {
                       if (day.wish) {
                         removeWish(day.dateStr)
                       } else {
-                        updateWish(day.dateStr, 'preferredShift', 'any')
+                        updateWish(day.dateStr, 'preferredShift', 'off')
                       }
                     }
                   }}
@@ -362,8 +374,8 @@ export default function ShiftRequestPage() {
                   
                   {day.wish && day.isCurrentMonth && (
                     <div className="space-y-1">
-                      <div className={`text-xs px-2 py-1 rounded border ${getShiftTypeColor(day.wish.preferredShift)}`}>
-                        {getShiftTypeText(day.wish.preferredShift)}
+                      <div className={`text-xs px-2 py-1 rounded border ${getHolidayTypeColor(day.wish.preferredShift)}`}>
+                        {getHolidayTypeText(day.wish.preferredShift)}
                       </div>
                       <div className={`flex items-center text-xs ${getPriorityColor(day.wish.priority)}`}>
                         <Star className="w-3 h-3 mr-1" />
@@ -374,7 +386,7 @@ export default function ShiftRequestPage() {
                   
                   {!day.wish && day.isCurrentMonth && (
                     <div className="text-xs text-gray-400 text-center">
-                      クリックして追加
+                      タップして休日希望を追加
                     </div>
                   )}
                 </div>
@@ -394,11 +406,16 @@ export default function ShiftRequestPage() {
                 <div key={dateStr} className="border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="font-medium text-gray-900">
-                      {new Date(dateStr).toLocaleDateString('ja-JP', { 
-                        month: 'long', 
-                        day: 'numeric',
-                        weekday: 'short'
-                      })}
+                      {(() => {
+                        // 日付文字列から正確にローカル日付を作成
+                        const [year, month, day] = dateStr.split('-').map(Number)
+                        const localDate = new Date(year, month - 1, day)
+                        return localDate.toLocaleDateString('ja-JP', {
+                          month: 'long',
+                          day: 'numeric',
+                          weekday: 'short'
+                        })
+                      })()}
                     </h4>
                     <button
                       onClick={() => removeWish(dateStr)}
@@ -412,36 +429,30 @@ export default function ShiftRequestPage() {
                     {/* シフト種別選択 */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-3">
-                        希望シフト
+                        休日希望
                       </label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2">
                         {[
-                          { value: 'any', label: 'どれでも', time: '' },
-                          { value: 'early', label: '早番', time: '07:00-16:00' },
-                          { value: 'day', label: '日勤', time: '09:00-18:00' },
-                          { value: 'late', label: '遅番', time: '13:00-22:00' },
-                          { value: 'night', label: '夜勤', time: '22:00-07:00' },
-                          { value: 'off', label: '公休', time: '休み' }
-                        ].map((shift) => (
+                          { value: 'off', label: '休日希望', time: '1日お休み', color: 'border-red-500 bg-red-50 text-red-700' },
+                          { value: 'none', label: '希望なし', time: '通常通り', color: 'border-gray-300 bg-gray-50 text-gray-700' }
+                        ].map((holiday) => (
                           <button
-                            key={shift.value}
+                            key={holiday.value}
                             type="button"
                             onClick={(e) => {
                               e.preventDefault()
                               e.stopPropagation()
-                              console.log(`Setting shift for ${dateStr} to ${shift.value}`)
-                              updateWish(dateStr, 'preferredShift', shift.value)
+                              console.log(`Setting holiday for ${dateStr} to ${holiday.value}`)
+                              updateWish(dateStr, 'preferredShift', holiday.value)
                             }}
                             className={`p-3 text-center rounded-lg border-2 transition-all btn-touch ${
-                              wish.preferredShift === shift.value
+                              wish.preferredShift === holiday.value
                                 ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                : 'border-gray-300 hover:border-blue-400'
+                                : holiday.color
                             }`}
                           >
-                            <div className="font-medium text-sm">{shift.label}</div>
-                            {shift.time && (
-                              <div className="text-xs text-gray-600 mt-1">{shift.time}</div>
-                            )}
+                            <div className="font-medium text-sm">{holiday.label}</div>
+                            <div className="text-xs mt-1">{holiday.time}</div>
                           </button>
                         ))}
                       </div>
@@ -486,13 +497,13 @@ export default function ShiftRequestPage() {
                   {/* 理由入力 */}
                   <div className="mt-3">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      理由（任意）
+                      休日理由（任意）
                     </label>
                     <input
                       type="text"
                       value={wish.reason || ''}
                       onChange={(e) => updateWish(dateStr, 'reason', e.target.value)}
-                      placeholder="例: 通院のため、家族の用事"
+                      placeholder="例: 通院のため、家族の用事、リフレッシュ"
                       className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -507,13 +518,13 @@ export default function ShiftRequestPage() {
           <div className="p-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Users className="w-4 h-4 inline mr-1" />
-              全体的な希望・コメント（任意）
+              全体的な休日希望・コメント（任意）
             </label>
             <textarea
               value={globalReason}
               onChange={(e) => setGlobalReason(e.target.value)}
               rows={3}
-              placeholder="シフト全体に関する希望やコメントがあれば記載してください&#10;例: 週2回は夜勤を希望、連続勤務は3日までにしたい"
+              placeholder="休日希望全体に関するコメントがあれば記載してください&#10;例: 月4回程度の休日を希望、連続勤務は3日までにしたい"
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 resize-none"
             />
           </div>
@@ -533,7 +544,7 @@ export default function ShiftRequestPage() {
             className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 px-6 rounded-lg font-medium flex items-center justify-center btn-touch"
           >
             <Save className="w-4 h-4 mr-2" />
-            {saving ? '提出中...' : 'シフト希望を提出'}
+            {saving ? '提出中...' : '休日希望を提出'}
           </button>
         </div>
 

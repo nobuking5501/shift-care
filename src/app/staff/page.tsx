@@ -5,28 +5,18 @@ import { useRouter } from 'next/navigation'
 import { onAuthStateChange } from '@/lib/auth'
 import Navbar from '@/components/layout/Navbar'
 import { canDeleteStaff } from '@/lib/staff-validation'
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  User, 
-  Mail, 
+import { STAFF_DATA, type Staff } from '@/lib/staff-data'
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  User,
+  Mail,
   Phone,
   Award,
   Moon
 } from 'lucide-react'
-
-interface Staff {
-  id: string
-  name: string
-  email: string
-  role: 'staff' | 'admin'
-  qualifications: string[]
-  nightShiftOK: boolean
-  phone: string
-  joinedDate: string
-}
 
 export default function StaffPage() {
   const [user, setUser] = useState<any>(null)
@@ -35,35 +25,15 @@ export default function StaffPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const router = useRouter()
 
-  // Demo staff data - 拡張版 (管理者1名 + 正社員10名 + パート・アルバイト5名)
-  const [staff, setStaff] = useState<Staff[]>([
-    // 管理者
-    { id: '1', name: '施設長 佐藤', email: 'sato@facility.com', role: 'admin', qualifications: ['社会福祉士', '介護支援専門員', '普通自動車免許'], nightShiftOK: false, phone: '090-1000-0001', joinedDate: '2020-04-01' },
-    // 正社員スタッフ
-    { id: '2', name: '田中太郎', email: 'tanaka@facility.com', role: 'staff', qualifications: ['介護福祉士', '普通自動車免許'], nightShiftOK: true, phone: '090-1111-0001', joinedDate: '2022-04-01' },
-    { id: '3', name: '山田花子', email: 'yamada@facility.com', role: 'staff', qualifications: ['社会福祉士', '介護福祉士', '普通自動車免許'], nightShiftOK: true, phone: '090-1111-0002', joinedDate: '2021-10-01' },
-    { id: '4', name: '鈴木一郎', email: 'suzuki@facility.com', role: 'staff', qualifications: ['介護福祉士', '実務者研修'], nightShiftOK: true, phone: '090-1111-0003', joinedDate: '2023-04-01' },
-    { id: '5', name: '高橋美咲', email: 'takahashi@facility.com', role: 'staff', qualifications: ['介護福祉士', '普通自動車免許'], nightShiftOK: false, phone: '090-1111-0004', joinedDate: '2022-10-01' },
-    { id: '6', name: '伊藤健太', email: 'ito@facility.com', role: 'staff', qualifications: ['介護福祉士', '普通自動車免許', '救急救命講習'], nightShiftOK: true, phone: '090-1111-0005', joinedDate: '2021-04-01' },
-    { id: '7', name: '渡辺麻衣', email: 'watanabe@facility.com', role: 'staff', qualifications: ['社会福祉士', '精神保健福祉士'], nightShiftOK: false, phone: '090-1111-0006', joinedDate: '2023-10-01' },
-    { id: '8', name: '中村雄介', email: 'nakamura@facility.com', role: 'staff', qualifications: ['介護福祉士', '普通自動車免許'], nightShiftOK: true, phone: '090-1111-0007', joinedDate: '2022-01-15' },
-    { id: '9', name: '小林さくら', email: 'kobayashi@facility.com', role: 'staff', qualifications: ['介護福祉士', '実務者研修'], nightShiftOK: false, phone: '090-1111-0008', joinedDate: '2023-07-01' },
-    { id: '10', name: '加藤大輔', email: 'kato@facility.com', role: 'staff', qualifications: ['介護福祉士', '普通自動車免許', '衛生管理者'], nightShiftOK: true, phone: '090-1111-0009', joinedDate: '2020-10-01' },
-    { id: '11', name: '吉田優子', email: 'yoshida@facility.com', role: 'staff', qualifications: ['社会福祉士', '介護福祉士'], nightShiftOK: false, phone: '090-1111-0010', joinedDate: '2021-07-01' },
-    // 非常勤パート・アルバイト
-    { id: '12', name: '松本真理（パート）', email: 'matsumoto@facility.com', role: 'staff', qualifications: ['介護初任者研修'], nightShiftOK: false, phone: '090-2222-0001', joinedDate: '2024-01-15' },
-    { id: '13', name: '森田浩二（パート）', email: 'morita@facility.com', role: 'staff', qualifications: ['実務者研修', '普通自動車免許'], nightShiftOK: false, phone: '090-2222-0002', joinedDate: '2024-03-01' },
-    { id: '14', name: '清水由美（アルバイト）', email: 'shimizu@facility.com', role: 'staff', qualifications: ['介護初任者研修'], nightShiftOK: false, phone: '090-2222-0003', joinedDate: '2024-04-10' },
-    { id: '15', name: '橋本学（パート）', email: 'hashimoto@facility.com', role: 'staff', qualifications: ['実務者研修'], nightShiftOK: false, phone: '090-2222-0004', joinedDate: '2024-02-20' },
-    { id: '16', name: '西村香織（アルバイト）', email: 'nishimura@facility.com', role: 'staff', qualifications: ['介護初任者研修'], nightShiftOK: false, phone: '090-2222-0005', joinedDate: '2024-05-01' }
-  ])
+  // 共通スタッフデータを使用
+  const [staff, setStaff] = useState<Staff[]>(STAFF_DATA)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChange((user) => {
       if (user) {
         setUser(user)
       } else {
-        router.push('/login')
+        router.push('/')
       }
       setLoading(false)
     })

@@ -40,25 +40,40 @@ export default function StaffDetailPage() {
       if (user) {
         setUser(user)
         
-        // Find staff member by ID
-        const staff = demoUsers.find(u => u.id === staffId)
-        if (staff) {
-          setStaffData(staff)
+        // Demo care manager data for Yamada Hanako
+        if (staffId === '3') {
+          const yamadaData = {
+            id: '3',
+            name: '山田花子（ケアマネジャー）',
+            email: 'yamada@facility.com',
+            position: 'ケアマネジャー（相談支援専門員）',
+            qualifications: ['介護支援専門員', '社会福祉士', '介護福祉士', '普通自動車免許'],
+            nightShiftOK: false,
+            employmentType: 'fullTime',
+            weeklyHours: 40,
+            role: 'staff',
+            createdAt: '2021-10-01',
+            experience: '相談支援業務 3年',
+            specialization: '知的障害・精神障害の支援計画作成',
+            managedUsers: 4,
+            completedPlans: 15
+          }
+          setStaffData(yamadaData)
           setEditForm({
-            name: staff.name,
-            email: staff.email,
-            position: staff.position,
-            qualifications: staff.qualifications.join(', '),
-            nightShiftOK: staff.nightShiftOK,
-            employmentType: staff.employmentType,
-            weeklyHours: staff.weeklyHours,
-            phone: generatePhoneNumber(staff.id) // Demo phone
+            name: yamadaData.name,
+            email: yamadaData.email,
+            position: yamadaData.position,
+            qualifications: yamadaData.qualifications.join(', '),
+            nightShiftOK: yamadaData.nightShiftOK,
+            employmentType: yamadaData.employmentType,
+            weeklyHours: yamadaData.weeklyHours,
+            phone: '090-1111-0002'
           })
         } else {
           router.push('/staff')
         }
       } else {
-        router.push('/login')
+        router.push('/')
       }
       setLoading(false)
     })
@@ -153,7 +168,7 @@ export default function StaffDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar userRole="admin" />
+      <Navbar userRole="staff" />
       
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Header */}
@@ -170,7 +185,7 @@ export default function StaffDetailPage() {
                 {isEditing ? 'スタッフ情報編集' : 'スタッフ詳細'}
               </h1>
               <p className="text-gray-600">
-                {staffData.name}の詳細情報
+                ケアマネジャーの詳細情報
               </p>
             </div>
           </div>
@@ -393,9 +408,42 @@ export default function StaffDetailPage() {
               </div>
             </div>
 
-            {/* Qualifications */}
+            {/* Care Manager Information */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">資格・スキル</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">ケアマネジャー情報</h3>
+              <div className="grid md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    担当利用者数
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <User className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-900">{staffData.managedUsers || 4}名</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    作成済み支援計画数
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <Award className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-900">{staffData.completedPlans || 15}件</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    専門分野
+                  </label>
+                  <span className="text-gray-900">{staffData.specialization || '知的障害・精神障害の支援計画作成'}</span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    経験年数
+                  </label>
+                  <span className="text-gray-900">{staffData.experience || '相談支援業務 3年'}</span>
+                </div>
+              </div>
+              <h4 className="text-md font-semibold text-gray-900 mb-3">保有資格</h4>
               {isEditing ? (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -427,38 +475,28 @@ export default function StaffDetailPage() {
               )}
             </div>
 
-            {/* Qualification Assessment */}
+            {/* Care Management Activities */}
             {!isEditing && (
-              <div className="bg-gray-50 rounded-lg p-4 mt-4">
-                <h4 className="text-sm font-semibold text-gray-900 mb-2">資格評価</h4>
-                {(() => {
-                  const assessment = assessQualificationLevel(staffData.qualifications)
-                  return (
-                    <div>
-                      <div className="flex items-center space-x-2 mb-2">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          assessment.level === 'advanced' ? 'bg-green-100 text-green-800' :
-                          assessment.level === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {assessment.level === 'advanced' ? '高度' :
-                           assessment.level === 'intermediate' ? '中級' : '基礎'}レベル
-                        </span>
-                        <span className="text-sm text-gray-600">スコア: {assessment.score}</span>
-                      </div>
-                      {assessment.recommendations.length > 0 && (
-                        <div className="text-xs text-gray-600">
-                          <p className="font-medium mb-1">推奨事項:</p>
-                          <ul className="list-disc list-inside space-y-1">
-                            {assessment.recommendations.map((rec, index) => (
-                              <li key={index}>{rec}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
+              <div className="bg-blue-50 rounded-lg p-4 mt-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-2">今月の活動実績</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">3</div>
+                    <div className="text-xs text-gray-600">新規アセスメント</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">2</div>
+                    <div className="text-xs text-gray-600">計画更新</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-orange-600">8</div>
+                    <div className="text-xs text-gray-600">モニタリング</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">5</div>
+                    <div className="text-xs text-gray-600">サービス調整</div>
+                  </div>
+                </div>
               </div>
             )}
           </div>

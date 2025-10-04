@@ -26,7 +26,7 @@ export default function Navbar({ userRole = 'staff' }: NavbarProps) {
   const handleLogout = async () => {
     try {
       await logout()
-      router.push('/login')
+      router.push('/')
     } catch (error) {
       console.error('Logout error:', error)
     }

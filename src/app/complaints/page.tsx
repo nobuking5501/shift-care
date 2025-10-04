@@ -109,7 +109,7 @@ export default function ComplaintsPage() {
       if (user) {
         setUser(user)
       } else {
-        router.push('/login')
+        router.push('/')
       }
       setLoading(false)
     })

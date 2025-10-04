@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -9,6 +9,8 @@ import { ja } from 'date-fns/locale'
 import { demoUsers, demoShifts } from '@/lib/demo-data'
 import { validateShift, hasAdminPermission, canEditShift, canDeleteShift } from '@/lib/shift-validation'
 import { assignmentAreas, demoAssignments, getDailyAssignmentSummary } from '@/lib/assignment-data'
+import { getStaffNameById, STAFF_DATA } from '@/lib/staff-data'
+import { useGeneratedShifts } from '@/lib/hooks/useGeneratedShifts'
 import type { StaffAssignment } from '@/types/assignment'
 import { Edit, Trash2, Plus, Users, Clock, CheckCircle, AlertTriangle, Info, MapPin, Home, Activity, Clipboard, X } from 'lucide-react'
 
@@ -22,6 +24,9 @@ interface ShiftEvent {
     staffId: string
     staffName: string
     shiftType: string
+    startTime: string
+    endTime: string
+    isConfirmed: boolean
   }
 }
 
@@ -29,9 +34,10 @@ interface ShiftCalendarProps {
   isAdmin?: boolean
   userId?: string
   userRole?: string
+  targetMonth: string
 }
 
-export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'staff' }: ShiftCalendarProps) {
+export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'staff', targetMonth }: ShiftCalendarProps) {
   const calendarRef = useRef<any>(null)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedShift, setSelectedShift] = useState<any>(null)
@@ -40,6 +46,7 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
   const [modalMode, setModalMode] = useState<'view' | 'add' | 'edit'>('view')
   const [validationErrors, setValidationErrors] = useState<any[]>([])
   const [assignments, setAssignments] = useState<StaffAssignment[]>(demoAssignments)
+  const [calendarKey, setCalendarKey] = useState(0) // カレンダー強制リレンダー用
   const [formData, setFormData] = useState({
     staffId: '',
     shiftType: 'day',
@@ -47,6 +54,36 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
     endTime: '18:00',
     areaId: 'area-1'
   })
+
+  // Use Supabase hook for real-time shift data with provided targetMonth
+  const { shifts: supabaseShifts, loading: supabaseLoading, error: supabaseError, forceRefresh } = useGeneratedShifts(targetMonth)
+
+  // State definition before useEffect
+  const [shifts, setShifts] = useState<ShiftEvent[]>([])
+
+  // 🚨 カレンダー診断ログ（問題特定用）
+  useEffect(() => {
+    console.log('🚨 ===== カレンダー診断レポート =====', {
+      現在時刻: new Date().toLocaleString('ja-JP'),
+      Props: {
+        targetMonth,
+        userId,
+        userRole,
+        isAdmin
+      },
+      Supabaseデータ: {
+        シフト数: supabaseShifts?.length || 0,
+        読込中: supabaseLoading,
+        エラー: supabaseError?.message || 'なし',
+        サンプルデータ: supabaseShifts?.[0] || 'なし'
+      },
+      カレンダー状態: {
+        表示シフト数: shifts.length,
+        カレンダーキー: calendarKey,
+        最終更新: new Date().toLocaleTimeString()
+      }
+    })
+  }, [supabaseShifts, supabaseLoading, supabaseError, targetMonth, shifts.length, calendarKey])
 
   // Helper functions defined first
   const getShiftTypeColor = (shiftType: string) => {
@@ -69,31 +106,156 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
     }
   }
 
-  // Convert demo data to calendar events
-  const convertShiftsToEvents = () => {
-    return demoShifts.map(shift => {
-      const user = demoUsers.find(u => u.id === shift.userId)
-      const colors = getShiftTypeColor(shift.shiftType)
-      
-      return {
-        id: shift.id,
-        title: `${user?.name} (${getShiftTypeName(shift.shiftType)})`,
-        date: shift.date,
-        backgroundColor: colors.bg,
-        borderColor: colors.border,
-        extendedProps: {
-          staffId: shift.userId,
-          staffName: user?.name || '',
-          shiftType: shift.shiftType,
-          startTime: shift.startTime,
-          endTime: shift.endTime,
-          isConfirmed: shift.isConfirmed
+  // Convert shift data to calendar events (Supabase ONLY)
+  const convertShiftsToEvents = (): ShiftEvent[] => {
+    // Use ONLY Supabase data for consistent cross-page data
+    let shiftsToUse
+    if (supabaseShifts && supabaseShifts.length > 0) {
+      // Use Supabase data (ONLY SOURCE)
+      shiftsToUse = supabaseShifts.map(supabase => ({
+        id: supabase.shift_id,
+        userId: supabase.user_id,
+        staffName: supabase.staff_name,
+        date: supabase.date,
+        shiftType: supabase.shift_type,
+        startTime: supabase.start_time,
+        endTime: supabase.end_time,
+        isConfirmed: supabase.is_confirmed
+      }))
+
+      console.log('✓ Supabaseデータをカレンダー形式に変換:', {
+        targetMonth,
+        originalCount: supabaseShifts.length,
+        convertedCount: shiftsToUse.length,
+        sampleData: shiftsToUse[0]
+      })
+    } else {
+      // 自動生成前はデモデータをフォールバック表示
+      shiftsToUse = demoShifts
+      console.log('⚠️ Supabaseデータなし - デモデータを表示:', {
+        targetMonth,
+        demoShiftsCount: demoShifts.length,
+        supabaseLoading
+      })
+    }
+
+    const finalEvents = shiftsToUse
+      .map(shift => {
+        // 共通スタッフデータを使用してスタッフ名を解決
+        let staffName = shift.staffName
+        if (!staffName) {
+          // userIdまたはuser_idから共通スタッフデータで検索
+          const userId = shift.userId || shift.user_id
+          staffName = userId ? getStaffNameById(userId) : '未割り当て'
+          // フォールバック: 古いデモデータとの互換性のため
+          if (staffName === '不明なスタッフ') {
+            const user = demoUsers.find(u => u.id === userId)
+            staffName = user?.name || '未割り当て'
+          }
         }
-      }
+
+        const colors = getShiftTypeColor(shift.shiftType)
+
+        // For staff view, only show their own shifts
+        if (!isAdmin && userId && shift.userId !== userId && shift.userId !== '3') {
+          // Show Yamada Hanako's shifts (userId '3') for demo purposes
+          console.log('🚫 スタッフフィルタで除外:', {
+            shiftUserId: shift.userId,
+            currentUserId: userId,
+            isAdmin,
+            staffName: shift.staffName
+          })
+          return null
+        }
+
+        // console.log('✅ シフト表示承認:', {
+        //   shiftId: shift.id,
+        //   staffName: shift.staffName,
+        //   date: shift.date,
+        //   shiftType: shift.shiftType,
+        //   userId: shift.userId,
+        //   isAdmin,
+        //   currentUserId: userId
+        // })
+
+        return {
+          id: shift.id,
+          title: `${staffName} (${getShiftTypeName(shift.shiftType)})`,
+          date: shift.date,
+          backgroundColor: colors.bg,
+          borderColor: colors.border,
+          extendedProps: {
+            staffId: shift.userId || shift.user_id,
+            staffName: staffName,
+            shiftType: shift.shiftType,
+            startTime: shift.startTime,
+            endTime: shift.endTime,
+            isConfirmed: shift.isConfirmed || shift.is_confirmed || true
+          }
+        }
+      })
+      .filter((event): event is ShiftEvent => event !== null)
+
+    console.log('📅 カレンダーイベント生成完了:', {
+      targetMonth,
+      totalEvents: finalEvents.length,
+      eventDates: finalEvents.map(e => e.date).slice(0, 5) // 最初の5日分の日付を表示
     })
+
+    return finalEvents
   }
 
-  const [shifts, setShifts] = useState<ShiftEvent[]>(convertShiftsToEvents())
+  // Update shifts when Supabase data changes (メインデータソース)
+  useEffect(() => {
+    // 無限ループ防止: loadingが完了してからのみ実行
+    if (supabaseLoading) {
+      console.log('🔄 Supabase読み込み中 - カレンダー更新待機')
+      return
+    }
+
+    const newShifts = convertShiftsToEvents()
+
+    console.log('🎯 カレンダー連動チェック:', {
+      targetMonth,
+      currentShiftsCount: shifts.length,
+      newShiftsCount: newShifts.length,
+      shouldUpdate: shifts.length !== newShifts.length
+    })
+
+    // シフト数が変わった場合は即座に更新（データ内容の詳細比較を避けて高速化）
+    if (shifts.length !== newShifts.length || shifts.length === 0) {
+      console.log('✅ カレンダー更新実行:', {
+        reason: shifts.length !== newShifts.length ? '件数変更' : '初期化',
+        calendarKey: calendarKey + 1
+      })
+      setShifts(newShifts)
+      setCalendarKey(prev => prev + 1)
+    }
+  }, [supabaseShifts, supabaseLoading, targetMonth]) // userId, isAdminを削除して安定化
+
+  // 🎯 強制リフレッシュ関数（外部から呼び出し可能）
+  const forceCalendarRefresh = () => {
+    console.log('🔄 カレンダー強制リフレッシュ実行')
+    const newShifts = convertShiftsToEvents()
+    setShifts(newShifts)
+    setCalendarKey(prev => prev + 1)
+  }
+
+  // LocalStorage通知による外部更新検出
+  useEffect(() => {
+    const handleStorageRefresh = (e: StorageEvent) => {
+      if (e.key === 'shiftGenerationCompleted') {
+        const notification = JSON.parse(e.newValue || '{}')
+        if (notification.targetMonth === targetMonth) {
+          console.log('🔄 カレンダー: 外部更新通知を受信')
+          setTimeout(() => forceCalendarRefresh(), 500)
+        }
+      }
+    }
+
+    window.addEventListener('storage', handleStorageRefresh)
+    return () => window.removeEventListener('storage', handleStorageRefresh)
+  }, [targetMonth])
 
   const handleDateClick = (arg: any) => {
     if (isAdmin) {
@@ -180,7 +342,14 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
       }
 
       // Add new assignment
-      const user = demoUsers.find(u => u.id === formData.staffId)
+      const staffList = [
+        { id: '1', name: '施設長 田中', position: '施設長' },
+        { id: '2', name: '佐藤太郎', position: '介護福祉士' },
+        { id: '3', name: '山田花子（ケアマネジャー）', position: 'ケアマネジャー' },
+        { id: '4', name: '高橋美咲', position: '介護福祉士' },
+        { id: '5', name: '加藤大輔', position: '介護福祉士' }
+      ]
+      const user = staffList.find(s => s.id === formData.staffId)
       const area = assignmentAreas.find(a => a.id === formData.areaId)
       const newAssignment = {
         id: `assign-${Date.now()}`,
@@ -226,7 +395,14 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
       }
 
       // Update existing shift
-      const user = demoUsers.find(u => u.id === formData.staffId)
+      const staffList = [
+        { id: '1', name: '施設長 田中', position: '施設長' },
+        { id: '2', name: '佐藤太郎', position: '介護福祉士' },
+        { id: '3', name: '山田花子（ケアマネジャー）', position: 'ケアマネジャー' },
+        { id: '4', name: '高橋美咲', position: '介護福祉士' },
+        { id: '5', name: '加藤大輔', position: '介護福祉士' }
+      ]
+      const user = staffList.find(s => s.id === formData.staffId)
       const area = assignmentAreas.find(a => a.id === formData.areaId)
       const colors = getShiftTypeColor(formData.shiftType)
       const updatedShifts = shifts.map(shift => 
@@ -319,9 +495,11 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
 
       <div className="p-6">
         <FullCalendar
+          key={`calendar-${calendarKey}-${targetMonth}`}
           ref={calendarRef}
           plugins={[dayGridPlugin, interactionPlugin]}
           initialView="dayGridMonth"
+          initialDate={`${targetMonth}-01`}
           locale="ja"
           events={shifts}
           editable={isAdmin}
@@ -347,6 +525,14 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
           eventDisplay="block"
           displayEventTime={false}
           eventClassNames="cursor-pointer"
+          eventDidMount={(info) => {
+            // 🎯 イベントが正常にマウントされたことを確認
+            console.log('イベントマウント:', {
+              eventId: info.event.id,
+              eventTitle: info.event.title,
+              eventDate: info.event.startStr
+            })
+          }}
         />
       </div>
 
@@ -486,7 +672,14 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
                             
                             <div className="space-y-2">
                               {shiftAssignments.map(assignment => {
-                                const staff = demoUsers.find(u => u.id === assignment.staffId)
+                                const staffList = [
+                                  { id: '1', name: '施設長 田中' },
+                                  { id: '2', name: '佐藤太郎' },
+                                  { id: '3', name: '山田花子（ケアマネジャー）' },
+                                  { id: '4', name: '高橋美咲' },
+                                  { id: '5', name: '加藤大輔' }
+                                ]
+                                const staff = staffList.find(s => s.id === assignment.staffId)
                                 return (
                                   <div 
                                     key={assignment.id}
@@ -632,9 +825,9 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
                     required
                   >
                     <option value="">スタッフを選択してください</option>
-                    {demoUsers.filter(user => user.role === 'staff').map(user => (
-                      <option key={user.id} value={user.id}>
-                        {user.name} ({user.position})
+                    {STAFF_DATA.map(staff => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.name} ({staff.role === 'admin' ? '施設長' : staff.qualifications[0] || '職員'})
                       </option>
                     ))}
                   </select>

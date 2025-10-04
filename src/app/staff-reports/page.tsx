@@ -134,7 +134,7 @@ export default function StaffReportsPage() {
       if (authUser) {
         setUser(authUser)
       } else {
-        router.push('/staff-login')
+        router.push('/')
       }
       setLoading(false)
     })

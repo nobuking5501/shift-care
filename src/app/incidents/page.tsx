@@ -92,7 +92,7 @@ export default function IncidentsPage() {
       if (user) {
         setUser(user)
       } else {
-        router.push('/login')
+        router.push('/')
       }
       setLoading(false)
     })

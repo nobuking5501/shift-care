@@ -4,19 +4,20 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChange, getCurrentDemoUser } from '@/lib/auth'
 import Navbar from '@/components/layout/Navbar'
-import { 
-  Calendar, 
-  Users, 
-  FileText, 
-  Clock, 
-  CheckCircle, 
+import {
+  Calendar,
+  Users,
+  FileText,
+  Clock,
+  CheckCircle,
   AlertCircle,
   TrendingUp,
   Download,
   ClipboardCheck,
   MessageSquare,
   Shield,
-  Activity
+  Activity,
+  User
 } from 'lucide-react'
 import { exportToPDF, exportToExcel, transformStaffData } from '@/lib/staffExport'
 import { demoUsers } from '@/lib/demo-data'
@@ -24,6 +25,7 @@ import { demoUsers } from '@/lib/demo-data'
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [redirecting, setRedirecting] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -31,15 +33,20 @@ export default function DashboardPage() {
       console.log('Auth state changed in admin dashboard:', user)
       if (user) {
         setUser(user)
-        // スタッフがアクセスした場合はスタッフダッシュボードにリダイレクト
+        // スタッフがアクセスした場合はすぐにリダイレクト
         if (user.role === 'staff') {
-          router.push('/staff-dashboard')
+          console.log('Staff user detected - redirecting to staff dashboard')
+          setRedirecting(true)
+          setTimeout(() => {
+            router.replace('/staff-dashboard')
+          }, 50) // 短い遅延で競合状態を回避
           return
         }
+        setLoading(false) // 管理者の場合のみローディング終了
       } else {
-        router.push('/login')
+        router.push('/')
+        setLoading(false)
       }
-      setLoading(false)
     })
 
     return () => unsubscribe()
@@ -54,10 +61,13 @@ export default function DashboardPage() {
   console.log('Admin Dashboard - User role:', userRole)
   console.log('Admin Dashboard - Loading:', loading)
 
-  if (loading) {
+  if (loading || redirecting) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        {redirecting && (
+          <p className="ml-4 text-gray-600">適切なページに移動しています...</p>
+        )}
       </div>
     )
   }
@@ -66,16 +76,19 @@ export default function DashboardPage() {
     return null
   }
 
-  // スタッフがアクセスした場合はスタッフダッシュボードにリダイレクト
+  // スタッフがアクセスした場合はリダイレクト済み（useEffectで処理）
   if (userRole === 'staff') {
-    router.push('/staff-dashboard')
-    return null
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   // Demo data - 管理者向け統計
   const stats = {
-    totalStaff: 16, // 管理者1名 + 正社員10名 + パート・アルバイト5名
-    todayShifts: 12, // 今日のシフト数
+    totalStaff: 5, // 管理者1名 + スタッフ4名
+    todayShifts: 4, // 今日のシフト数
     totalIncidents: 3, // 総事故・ヒヤリハット数
     pendingIncidents: 1, // 未対応事故・ヒヤリハット数
     accidents: 1, // 事故数
@@ -97,18 +110,16 @@ export default function DashboardPage() {
   ]
 
   const upcomingShifts = [
-    { id: 1, date: '2025-06-02', shift: '早番', staff: '鈴木一郎' },
+    { id: 1, date: '2025-06-02', shift: '早番', staff: '田中太郎' },
     { id: 2, date: '2025-06-02', shift: '日勤', staff: '高橋美咲' },
-    { id: 3, date: '2025-06-02', shift: '日勤', staff: '渡辺麻衣' },
-    { id: 4, date: '2025-06-02', shift: '遅番', staff: '加藤大輔' },
-    { id: 5, date: '2025-06-02', shift: '夜勤', staff: '田中太郎' },
-    { id: 6, date: '2025-06-02', shift: '日勤（短時間）', staff: '松本真理（パート）' },
+    { id: 3, date: '2025-06-02', shift: '遅番', staff: '加藤大輔' },
+    { id: 4, date: '2025-06-02', shift: '夜勤', staff: '山田花子' },
   ]
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar userRole={userRole} />
-      
+
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* プロトタイプ版の注記 */}
         <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -271,7 +282,7 @@ export default function DashboardPage() {
         {/* Quick Actions - 管理者向け */}
         {userRole === 'admin' ? (
           <div className="mt-8 grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-            <button 
+            <button
               onClick={() => router.push('/shifts')}
               className="bg-blue-600 hover:bg-blue-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -280,7 +291,7 @@ export default function DashboardPage() {
               <p className="text-blue-100 text-sm">シフト表の確認・編集</p>
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/reports')}
               className="bg-green-600 hover:bg-green-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -289,7 +300,7 @@ export default function DashboardPage() {
               <p className="text-green-100 text-sm">スタッフ日報の確認・管理</p>
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/incidents')}
               className="bg-red-600 hover:bg-red-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -298,7 +309,7 @@ export default function DashboardPage() {
               <p className="text-red-100 text-sm">事故・ヒヤリハット管理</p>
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/complaints')}
               className="bg-orange-600 hover:bg-orange-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -307,7 +318,7 @@ export default function DashboardPage() {
               <p className="text-orange-100 text-sm">苦情・要望管理</p>
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/safety-records')}
               className="bg-indigo-600 hover:bg-indigo-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -316,7 +327,7 @@ export default function DashboardPage() {
               <p className="text-indigo-100 text-sm">防災・感染症記録管理</p>
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/support-plan')}
               className="bg-orange-600 hover:bg-orange-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -325,7 +336,7 @@ export default function DashboardPage() {
               <p className="text-orange-100 text-sm">個別支援計画書の作成・管理</p>
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/staff')}
               className="bg-gray-600 hover:bg-gray-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -333,11 +344,20 @@ export default function DashboardPage() {
               <h3 className="text-lg font-semibold mb-1">スタッフ管理</h3>
               <p className="text-gray-100 text-sm">スタッフ情報の管理</p>
             </button>
+
+            <button
+              onClick={() => router.push('/users')}
+              className="bg-teal-600 hover:bg-teal-700 text-white p-6 rounded-lg text-left btn-touch"
+            >
+              <User className="w-8 h-8 mb-2" />
+              <h3 className="text-lg font-semibold mb-1">利用者管理</h3>
+              <p className="text-teal-100 text-sm">利用者情報の管理</p>
+            </button>
           </div>
         ) : (
           /* スタッフ向けクイックアクション */
           <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <button 
+            <button
               onClick={() => router.push('/incident-report')}
               className="bg-red-600 hover:bg-red-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -346,7 +366,7 @@ export default function DashboardPage() {
               <p className="text-red-100 text-sm">事故・ヒヤリハット報告</p>
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/complaint-form')}
               className="bg-orange-600 hover:bg-orange-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -355,7 +375,7 @@ export default function DashboardPage() {
               <p className="text-orange-100 text-sm">苦情・要望の受付</p>
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/drill-form')}
               className="bg-blue-600 hover:bg-blue-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -364,7 +384,7 @@ export default function DashboardPage() {
               <p className="text-blue-100 text-sm">防災訓練記録</p>
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/infection-form')}
               className="bg-purple-600 hover:bg-purple-700 text-white p-6 rounded-lg text-left btn-touch"
             >
@@ -390,7 +410,7 @@ export default function DashboardPage() {
               </div>
               <div className="p-6">
                 <div className="grid md:grid-cols-2 gap-4">
-                  <button 
+                  <button
                     onClick={() => router.push('/evaluation')}
                     className="bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-lg text-left btn-touch transition-colors"
                   >
@@ -402,8 +422,8 @@ export default function DashboardPage() {
                       {new Date().getFullYear()}年度の自己評価表を作成
                     </p>
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={() => router.push('/evaluation/history')}
                     className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg text-left btn-touch transition-colors"
                   >
@@ -416,7 +436,7 @@ export default function DashboardPage() {
                     </p>
                   </button>
                 </div>
-                
+
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                   <h4 className="text-sm font-medium text-gray-900 mb-2">評価項目</h4>
                   <div className="text-xs text-gray-600 grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -450,7 +470,7 @@ export default function DashboardPage() {
               </div>
               <div className="p-6">
                 <div className="grid md:grid-cols-2 gap-4">
-                  <button 
+                  <button
                     onClick={async () => {
                       try {
                         const staffData = transformStaffData(demoUsers)
@@ -474,7 +494,7 @@ export default function DashboardPage() {
                     </p>
                   </button>
 
-                  <button 
+                  <button
                     onClick={() => {
                       try {
                         const staffData = transformStaffData(demoUsers)
@@ -510,7 +530,7 @@ export default function DashboardPage() {
                     <span>• 夜勤可否</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
-                    対象: スタッフ {demoUsers.filter(u => u.role === 'staff').length}名（管理者は除く）
+                    対象: スタッフ 4名（管理者は除く）
                   </p>
                 </div>
               </div>

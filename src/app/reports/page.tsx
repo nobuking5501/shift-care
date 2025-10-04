@@ -102,7 +102,7 @@ export default function ReportsPage() {
           return
         }
       } else {
-        router.push('/login')
+        router.push('/')
       }
       setLoading(false)
     })
