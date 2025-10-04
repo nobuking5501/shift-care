@@ -142,10 +142,10 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
     const finalEvents = shiftsToUse
       .map(shift => {
         // 共通スタッフデータを使用してスタッフ名を解決
-        let staffName = shift.staffName
+        let staffName = 'staffName' in shift ? shift.staffName : undefined
         if (!staffName) {
           // userIdまたはuser_idから共通スタッフデータで検索
-          const userId = shift.userId || shift.user_id
+          const userId = 'userId' in shift ? shift.userId : ('user_id' in shift ? shift.user_id : undefined)
           staffName = userId ? getStaffNameById(userId) : '未割り当て'
           // フォールバック: 古いデモデータとの互換性のため
           if (staffName === '不明なスタッフ') {
@@ -154,43 +154,50 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
           }
         }
 
-        const colors = getShiftTypeColor(shift.shiftType)
+        const shiftType = 'shiftType' in shift ? shift.shiftType : shift.shift_type || ''
+        const colors = getShiftTypeColor(shiftType)
+        const shiftUserId = 'userId' in shift ? shift.userId : ('user_id' in shift ? shift.user_id : '')
+        const shiftId = 'id' in shift ? shift.id : ('shift_id' in shift ? shift.shift_id : '')
+        const shiftDate = shift.date
+        const shiftStartTime = 'startTime' in shift ? shift.startTime : ('start_time' in shift ? shift.start_time : '')
+        const shiftEndTime = 'endTime' in shift ? shift.endTime : ('end_time' in shift ? shift.end_time : '')
+        const isConfirmed = 'isConfirmed' in shift ? shift.isConfirmed : ('is_confirmed' in shift ? shift.is_confirmed : false)
 
         // For staff view, only show their own shifts
-        if (!isAdmin && userId && shift.userId !== userId && shift.userId !== '3') {
+        if (!isAdmin && userId && shiftUserId !== userId && shiftUserId !== '3') {
           // Show Yamada Hanako's shifts (userId '3') for demo purposes
           console.log('🚫 スタッフフィルタで除外:', {
-            shiftUserId: shift.userId,
+            shiftUserId,
             currentUserId: userId,
             isAdmin,
-            staffName: shift.staffName
+            staffName
           })
           return null
         }
 
         // console.log('✅ シフト表示承認:', {
-        //   shiftId: shift.id,
-        //   staffName: shift.staffName,
-        //   date: shift.date,
-        //   shiftType: shift.shiftType,
-        //   userId: shift.userId,
+        //   shiftId,
+        //   staffName,
+        //   date: shiftDate,
+        //   shiftType,
+        //   userId: shiftUserId,
         //   isAdmin,
         //   currentUserId: userId
         // })
 
         return {
-          id: shift.id,
-          title: `${staffName} (${getShiftTypeName(shift.shiftType)})`,
-          date: shift.date,
+          id: shiftId,
+          title: `${staffName} (${getShiftTypeName(shiftType)})`,
+          date: shiftDate,
           backgroundColor: colors.bg,
           borderColor: colors.border,
           extendedProps: {
-            staffId: shift.userId || shift.user_id,
+            staffId: shiftUserId,
             staffName: staffName,
-            shiftType: shift.shiftType,
-            startTime: shift.startTime,
-            endTime: shift.endTime,
-            isConfirmed: shift.isConfirmed || shift.is_confirmed || true
+            shiftType: shiftType,
+            startTime: shiftStartTime,
+            endTime: shiftEndTime,
+            isConfirmed: isConfirmed
           }
         }
       })
