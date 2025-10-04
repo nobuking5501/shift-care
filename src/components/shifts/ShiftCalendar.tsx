@@ -74,7 +74,7 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
       Supabaseデータ: {
         シフト数: supabaseShifts?.length || 0,
         読込中: supabaseLoading,
-        エラー: supabaseError?.message || 'なし',
+        エラー: supabaseError || 'なし',
         サンプルデータ: supabaseShifts?.[0] || 'なし'
       },
       カレンダー状態: {
