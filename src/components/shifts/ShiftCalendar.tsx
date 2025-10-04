@@ -141,11 +141,14 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
 
     const finalEvents = shiftsToUse
       .map(shift => {
+        // 型安全なプロパティアクセス
+        const shiftAny = shift as any
+
         // 共通スタッフデータを使用してスタッフ名を解決
-        let staffName = 'staffName' in shift ? shift.staffName : undefined
+        let staffName = shiftAny.staffName
         if (!staffName) {
           // userIdまたはuser_idから共通スタッフデータで検索
-          const userId = 'userId' in shift ? shift.userId : ('user_id' in shift ? shift.user_id : undefined)
+          const userId = shiftAny.userId || shiftAny.user_id
           staffName = userId ? getStaffNameById(userId) : '未割り当て'
           // フォールバック: 古いデモデータとの互換性のため
           if (staffName === '不明なスタッフ') {
@@ -154,14 +157,14 @@ export default function ShiftCalendar({ isAdmin = false, userId, userRole = 'sta
           }
         }
 
-        const shiftType = 'shiftType' in shift ? shift.shiftType : shift.shift_type || ''
+        const shiftType = shiftAny.shiftType || shiftAny.shift_type || ''
         const colors = getShiftTypeColor(shiftType)
-        const shiftUserId = 'userId' in shift ? shift.userId : ('user_id' in shift ? shift.user_id : '')
-        const shiftId = 'id' in shift ? shift.id : ('shift_id' in shift ? shift.shift_id : '')
+        const shiftUserId = shiftAny.userId || shiftAny.user_id || ''
+        const shiftId = shiftAny.id || shiftAny.shift_id || ''
         const shiftDate = shift.date
-        const shiftStartTime = 'startTime' in shift ? shift.startTime : ('start_time' in shift ? shift.start_time : '')
-        const shiftEndTime = 'endTime' in shift ? shift.endTime : ('end_time' in shift ? shift.end_time : '')
-        const isConfirmed = 'isConfirmed' in shift ? shift.isConfirmed : ('is_confirmed' in shift ? shift.is_confirmed : false)
+        const shiftStartTime = shiftAny.startTime || shiftAny.start_time || ''
+        const shiftEndTime = shiftAny.endTime || shiftAny.end_time || ''
+        const isConfirmed = shiftAny.isConfirmed || shiftAny.is_confirmed || false
 
         // For staff view, only show their own shifts
         if (!isAdmin && userId && shiftUserId !== userId && shiftUserId !== '3') {
