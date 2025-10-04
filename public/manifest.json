@@ -1,7 +1,7 @@
 {
-  "name": "施設総合管理アプリ",
-  "short_name": "総合管理",
-  "description": "障害者施設向け総合支援アプリ",
+  "name": "Shift Care",
+  "short_name": "Shift Care",
+  "description": "障害者施設向けシフト管理・総合支援アプリ",
   "theme_color": "#2563eb",
   "background_color": "#ffffff",
   "display": "standalone",

@@ -5,8 +5,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: '総合管理アプリ',
-  description: '障害者施設向け総合管理システム',
+  title: 'Shift Care',
+  description: '障害者施設向けシフト管理・総合支援システム',
   manifest: '/manifest.json',
   themeColor: '#2563eb',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
@@ -27,7 +27,7 @@ export default function RootLayout({
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="総合管理" />
+        <meta name="apple-mobile-web-app-title" content="Shift Care" />
       </head>
       <body className={inter.className}>
         <div className="min-h-screen bg-background">
