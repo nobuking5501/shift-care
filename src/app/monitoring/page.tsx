@@ -131,6 +131,8 @@ interface MonitoringRecord {
   }
   createdAt: Date
   updatedAt: Date
+  createdBy?: string
+  createdByName?: string
   submittedAt?: Date
   status: 'draft' | 'completed' | 'submitted'
   reviewedBy?: string
