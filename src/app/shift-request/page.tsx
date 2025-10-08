@@ -194,18 +194,24 @@ export default function ShiftRequestPage() {
 
   // 提出処理
   const handleSubmit = async () => {
+    console.log('=== 休日希望提出開始 ===')
+    console.log('現在の wishes:', wishes)
+
     const wishList = Object.values(wishes).filter(wish =>
       wish.preferredShift && wish.preferredShift !== 'any' || wish.reason
     )
 
+    console.log('フィルタ後の wishList:', wishList)
+
     if (wishList.length === 0) {
-      alert('少なくとも1つの希望を入力してください')
+      alert('⚠️ 少なくとも1つの希望を入力してください\n\n操作方法：\n1. カレンダーで日付をクリック\n2. 「休日希望」を選択\n3. 「保存して提出」ボタンをクリック')
       return
     }
 
     setSaving(true)
     try {
       const currentUser = getCurrentDemoUser()
+      console.log('現在のユーザー情報:', currentUser)
 
       // Convert wishes to holiday requests format
       const holidayRequests = Object.values(wishes)
@@ -216,15 +222,19 @@ export default function ShiftRequestPage() {
           priority: wish.priority
         }))
 
+      console.log('変換後の holidayRequests:', holidayRequests)
+
       if (holidayRequests.length === 0) {
-        alert('休日希望が選択されていません')
+        alert('⚠️ 休日希望が選択されていません\n\n「休日希望」を選択した日付のみが提出されます。\n\n現在の選択:\n' +
+          wishList.map(w => `${w.date}: ${w.preferredShift === 'off' ? '休日希望' : w.preferredShift || '未設定'}`).join('\n'))
+        setSaving(false)
         return
       }
 
       // Save to Supabase
       const holidayRequestData = {
         staff_name: currentUser?.displayName || '山田花子（ケアマネジャー）',
-        staff_user_id: currentUser?.id || 'demo-staff',
+        staff_user_id: currentUser?.id || '3',
         requested_dates: holidayRequests.map(req => req.date),
         reason: globalReason || holidayRequests.map(req => req.reason).join(', '),
         priority: holidayRequests.some(req => req.priority === 'high') ? 'high' as const :
@@ -232,20 +242,24 @@ export default function ShiftRequestPage() {
         target_month: `${targetMonth.getFullYear()}-${String(targetMonth.getMonth() + 1).padStart(2, '0')}`
       }
 
-      console.log('Submitting holiday request to Supabase:', holidayRequestData)
+      console.log('🚀 Supabaseに送信するデータ:', holidayRequestData)
 
-      await createRequest(holidayRequestData)
+      const result = await createRequest(holidayRequestData)
+
+      console.log('✅ Supabase保存成功:', result)
 
       setSaved(true)
 
       // 3秒後にスタッフダッシュボードに戻る
       setTimeout(() => {
-        router.push('/staff-dashboard')
+        router.push('/staff-shifts')
       }, 3000)
 
     } catch (error) {
-      console.error('シフト希望提出エラー:', error)
-      alert('シフト希望の提出に失敗しました: ' + (error instanceof Error ? error.message : '不明なエラー'))
+      console.error('❌ シフト希望提出エラー:', error)
+      console.error('エラー詳細:', JSON.stringify(error, null, 2))
+      alert('❌ シフト希望の提出に失敗しました\n\nエラー: ' + (error instanceof Error ? error.message : JSON.stringify(error)) +
+        '\n\nブラウザのコンソール（F12）を開いて詳細を確認してください。')
     } finally {
       setSaving(false)
     }

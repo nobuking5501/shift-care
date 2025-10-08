@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChange, getCurrentDemoUser } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 import Navbar from '@/components/layout/Navbar'
-import { 
+import {
   FileText,
   Calendar,
   Clock,
@@ -26,7 +27,8 @@ import {
   TrendingUp,
   BarChart3,
   FileCheck,
-  Plus
+  Plus,
+  Database
 } from 'lucide-react'
 
 // 日報データの型定義
@@ -80,7 +82,9 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
-  
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generatingProgress, setGeneratingProgress] = useState({ current: 0, total: 0, month: 0 })
+
   // フィルター状態
   const [filters, setFilters] = useState({
     dateFrom: '',
@@ -110,8 +114,55 @@ export default function ReportsPage() {
     return () => unsubscribe()
   }, [router])
 
-  // デモ日報データの生成
+  // Supabaseから日報データを取得
   useEffect(() => {
+    const fetchReports = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('daily_reports')
+          .select('*')
+          .order('report_date', { ascending: false })
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error('日報取得エラー:', error)
+          return
+        }
+
+        if (data && data.length > 0) {
+          // Supabaseのデータをフロントエンドの型に変換
+          const formattedReports: DailyReport[] = data.map(report => ({
+            id: report.id,
+            date: report.report_date,
+            staffId: report.staff_id,
+            staffName: report.staff_name,
+            shiftType: report.shift_type as 'early' | 'day' | 'late' | 'night',
+            submittedAt: new Date(report.submitted_at),
+            basic: {
+              generalActivities: report.general_activities || '',
+              teamNotes: report.team_notes || ''
+            },
+            userReports: report.user_reports || [],
+            summary: {
+              totalUsers: report.total_users || 0,
+              completedReports: report.completed_reports || 0,
+              incompletedReports: report.incompleted_reports || 0
+            },
+            status: 'submitted' // デフォルトでsubmitted
+          }))
+
+          setReports(formattedReports)
+          console.log('Supabaseから日報を取得しました:', formattedReports.length, '件')
+        } else {
+          console.log('日報データがありません。')
+          setReports([])
+        }
+      } catch (error) {
+        console.error('日報取得処理エラー:', error)
+        setReports([])
+      }
+    }
+
     const generateDemoReports = () => {
       const staffMembers = [
         { id: '2', name: '田中太郎' },
@@ -137,9 +188,9 @@ export default function ReportsPage() {
         const dateStr = date.toISOString().split('T')[0]
 
         staffMembers.forEach((staff, index) => {
-          if (i % 2 === 0 || index < 2) { // 一部のスタッフは毎日、他は隔日で日報提出
+          if (i % 2 === 0 || index < 2) {
             const reportId = `report-${dateStr}-${staff.id}`
-            
+
             const userReports: UserDailyReport[] = serviceUsers.map((serviceUser, userIndex) => ({
               userId: serviceUser.id,
               userName: serviceUser.name,
@@ -188,8 +239,10 @@ export default function ReportsPage() {
       setReports(demoReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))
     }
 
-    generateDemoReports()
-  }, [])
+    if (user && user.role === 'admin') {
+      fetchReports()
+    }
+  }, [user])
 
   // フィルタリング処理
   useEffect(() => {
@@ -302,6 +355,492 @@ export default function ReportsPage() {
     })
   }
 
+  // デモ用：全データをクリア
+  const handleClearAllData = async () => {
+    const confirmed = window.confirm(
+      '⚠️ 全ての日報データ、モニタリング記録、支援計画書、シフト関連データを削除します。\n\nこの操作は取り消せません。本当に実行しますか？\n\n※デモ用の機能です'
+    )
+
+    if (!confirmed) return
+
+    try {
+      let totalDeleted = 0
+
+      // 1. 日報データを削除
+      console.log('日報データの削除を開始します...')
+
+      // まず件数を取得
+      const { count, error: countError } = await supabase
+        .from('daily_reports')
+        .select('*', { count: 'exact', head: true })
+
+      if (countError) {
+        console.error('日報データ件数取得エラー:', countError)
+        alert(`エラー: 日報データの件数取得に失敗しました\n${countError.message}`)
+        return
+      }
+
+      console.log('削除対象の日報件数:', count)
+
+      if (count && count > 0) {
+        // 全件取得して1件ずつ削除（RLS対策）
+        const { data: allReports, error: fetchError } = await supabase
+          .from('daily_reports')
+          .select('id')
+
+        if (fetchError) {
+          console.error('日報データ取得エラー:', fetchError)
+          alert(`エラー: 日報データの取得に失敗しました\n${fetchError.message}`)
+          return
+        }
+
+        if (allReports && allReports.length > 0) {
+          console.log('削除開始:', allReports.length, '件')
+
+          // 1件ずつ削除
+          for (const report of allReports) {
+            const { error: deleteError } = await supabase
+              .from('daily_reports')
+              .delete()
+              .eq('id', report.id)
+
+            if (deleteError) {
+              console.error(`ID ${report.id} の削除エラー:`, deleteError)
+            } else {
+              totalDeleted++
+              console.log(`削除成功: ${totalDeleted}/${allReports.length}`)
+            }
+          }
+
+          console.log('日報削除完了:', totalDeleted, '件')
+        }
+      }
+
+      // 2. モニタリング記録を削除（LocalStorage）
+      const monitoringRecords = localStorage.getItem('monitoringRecords')
+      let monitoringCount = 0
+      if (monitoringRecords) {
+        try {
+          const records = JSON.parse(monitoringRecords)
+          monitoringCount = records.length
+          localStorage.removeItem('monitoringRecords')
+        } catch (e) {
+          console.error('モニタリング記録の削除エラー:', e)
+        }
+      }
+
+      // 3. 支援計画書を削除（LocalStorage）
+      const supportPlans = localStorage.getItem('supportPlans')
+      let planCount = 0
+      if (supportPlans) {
+        try {
+          const plans = JSON.parse(supportPlans)
+          planCount = plans.length
+          localStorage.removeItem('supportPlans')
+        } catch (e) {
+          console.error('支援計画書の削除エラー:', e)
+        }
+      }
+
+      // 画面上のデータもクリア
+      setReports([])
+      setFilteredReports([])
+      setSelectedReport(null)
+
+      alert(`✅ 日報関連データを削除しました\n\n日報: ${totalDeleted}件\nモニタリング記録: ${monitoringCount}件\n支援計画書: ${planCount}件\n\n新しいデモを開始できます。`)
+    } catch (error) {
+      console.error('データ削除処理エラー:', error)
+      alert('データの削除に失敗しました')
+    }
+  }
+
+  // デモデータ自動生成
+  const handleInsertDemoData = async () => {
+    const confirmed = window.confirm(
+      '📊 デモデータを生成します\n\n直近3ヶ月のデモ日報データ（約100件）を自動生成します。\n\n生成には10～15秒程度かかります。\n実行しますか？'
+    )
+
+    if (!confirmed) return
+
+    setIsGenerating(true)
+
+    // 直近3ヶ月のデータを生成（約100件）
+    const today = new Date()
+    const currentMonth = today.getMonth() + 1 // 1-12
+    const currentYear = today.getFullYear()
+
+    // 3ヶ月前から今月まで
+    const startMonth = currentMonth - 2
+    const monthsToGenerate = 3
+    const totalDays = monthsToGenerate * 28 // 概算
+
+    setGeneratingProgress({ current: 0, total: totalDays, month: 0 })
+
+    try {
+      console.log('デモデータ生成開始...')
+      let insertedCount = 0
+
+      // 直近3ヶ月のみループ
+      for (let i = 0; i < monthsToGenerate; i++) {
+        let month = startMonth + i
+        let year = currentYear
+
+        // 月が0以下の場合は前年に調整
+        if (month <= 0) {
+          month += 12
+          year -= 1
+        }
+
+        setGeneratingProgress(prev => ({ ...prev, month }))
+        console.log(`${month}月のデータを生成中...`)
+
+        // 各月28日まで
+        for (let day = 1; day <= 28; day++) {
+          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+          const date = new Date(dateStr)
+          const dayOfWeek = date.getDay() // 0=日曜, 1=月曜, ...
+
+          const reportsToInsert = []
+
+          // スタッフ1: 田中太郎（平日メイン）
+          if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            const shiftType = day % 3 === 0 ? 'day' : day % 3 === 1 ? 'early' : 'late'
+
+            reportsToInsert.push({
+              report_date: dateStr,
+              shift_type: shiftType,
+              staff_id: '2',
+              staff_name: '田中太郎',
+              weather: ['晴れ', '曇り', '雨', '晴れ時々曇り'][day % 4],
+              temperature: `${20 + month * 3 + (day % 10)}℃`,
+              general_activities: `朝の申し送り、全体バイタルチェック、集団レクリエーション（${['音楽療法', '手芸', '体操'][day % 3]}）実施、昼食準備・配膳・介助、午後の個別ケア対応、おやつ提供、夕方の見守り・記録作成`,
+              team_notes: day % 10 === 1 ? '新規利用者様の受け入れ準備を進めています。' : day % 10 === 5 ? '車椅子の定期点検を実施しました。' : '',
+              user_reports: [
+                {
+                  userId: 'user1',
+                  userName: '田中 花子',
+                  vitalSigns: {
+                    temperature: `36.${3 + (day % 5)}`,
+                    bloodPressure: `${120 + (day % 20)}/${70 + (day % 15)}`,
+                    pulse: `${65 + (day % 20)}`,
+                    oxygen: `${96 + (day % 4)}`
+                  },
+                  moodCondition: 'good',
+                  appetiteCondition: 'good',
+                  sleepCondition: 'good',
+                  activities: '朝の申し送り参加、バイタルチェック実施、入浴介助（見守り）、昼食介助（一部介助）、レクリエーション参加（音楽療法）',
+                  medicationStatus: '朝・昼・夕の定時薬3錠ずつ。声かけにて正常に服薬。',
+                  specialNotes: '今日は表情が明るく、積極的に活動に参加されていました。',
+                  concernsIssues: '',
+                  completed: true
+                },
+                {
+                  userId: 'user2',
+                  userName: '佐藤 一郎',
+                  vitalSigns: {
+                    temperature: `36.${4 + (day % 4)}`,
+                    bloodPressure: `${125 + (day % 15)}/${75 + (day % 10)}`,
+                    pulse: `${70 + (day % 15)}`,
+                    oxygen: `${97 + (day % 3)}`
+                  },
+                  moodCondition: 'good',
+                  appetiteCondition: 'fair',
+                  sleepCondition: 'good',
+                  activities: 'バイタル測定、モーニングケア、リハビリテーション参加（歩行訓練）、昼食準備・配膳',
+                  medicationStatus: '朝食後：降圧剤1錠、血糖降下剤1錠。全て服薬確認済み。',
+                  specialNotes: 'リハビリに意欲的に取り組まれていました。',
+                  concernsIssues: day % 7 === 0 ? '少し食欲が落ちているため経過観察が必要' : '',
+                  completed: true
+                },
+                {
+                  userId: 'user3',
+                  userName: '山田 美智子',
+                  vitalSigns: {
+                    temperature: `36.${2 + (day % 6)}`,
+                    bloodPressure: `${118 + (day % 22)}/${68 + (day % 17)}`,
+                    pulse: `${68 + (day % 18)}`,
+                    oxygen: `${96 + (day % 4)}`
+                  },
+                  moodCondition: 'excellent',
+                  appetiteCondition: 'good',
+                  sleepCondition: 'good',
+                  activities: '起床介助、身支度支援、朝食介助、服薬確認、散歩同行（施設内）、午睡見守り',
+                  medicationStatus: '定時薬：朝2錠、昼1錠、夕2錠。声かけにより自己服薬できた。',
+                  specialNotes: '手芸活動で素敵な作品を完成され、とても喜ばれていました。',
+                  concernsIssues: '',
+                  completed: true
+                }
+              ],
+              total_users: 5,
+              completed_reports: 3,
+              incompleted_reports: 2,
+              submitted: true,
+              submitted_at: `${dateStr} 17:30:00`,
+              created_at: `${dateStr} 17:30:00`,
+              updated_at: `${dateStr} 17:30:00`
+            })
+          }
+
+          // スタッフ2: 山田花子（週末・平日交互）
+          if (dayOfWeek === 0 || dayOfWeek === 6 || day % 2 === 0) {
+            const shiftType = day % 4 === 0 ? 'day' : day % 4 === 1 ? 'late' : day % 4 === 2 ? 'early' : 'day'
+
+            reportsToInsert.push({
+              report_date: dateStr,
+              shift_type: shiftType,
+              staff_id: '3',
+              staff_name: '山田花子',
+              weather: ['晴れ', '曇り', '小雨', '快晴', '晴れ'][day % 5],
+              temperature: `${19 + month * 3 + (day % 12)}℃`,
+              general_activities: `早朝バイタル測定、朝食準備・食事介助、入浴介助（${(day % 3) + 2}名）、機能訓練プログラム実施、午後のレクリエーション（${['手芸', '歌', '折り紙', 'ゲーム'][day % 4]}）、記録整理・申し送り`,
+              team_notes: day % 12 === 3 ? '季節の行事（お花見）の企画について検討中です。' : day % 12 === 7 ? '感染症予防のため、手洗い・消毒の徹底を継続中。' : '',
+              user_reports: [
+                {
+                  userId: 'user1',
+                  userName: '田中 花子',
+                  vitalSigns: {
+                    temperature: `36.${4 + (day % 4)}`,
+                    bloodPressure: `${122 + (day % 18)}/${72 + (day % 13)}`,
+                    pulse: `${67 + (day % 18)}`,
+                    oxygen: `${97 + (day % 3)}`
+                  },
+                  moodCondition: 'good',
+                  appetiteCondition: 'excellent',
+                  sleepCondition: 'good',
+                  activities: 'バイタルチェック、整容介助、リハビリ体操参加、食事介助（見守り）、口腔ケア',
+                  medicationStatus: '処方薬5種類を1日3回に分けて服薬。問題なし。',
+                  specialNotes: 'レクリエーション活動で他の利用者様との交流が活発でした。',
+                  concernsIssues: '',
+                  completed: true
+                },
+                {
+                  userId: 'user2',
+                  userName: '佐藤 一郎',
+                  vitalSigns: {
+                    temperature: `36.${3 + (day % 5)}`,
+                    bloodPressure: `${128 + (day % 12)}/${77 + (day % 8)}`,
+                    pulse: `${72 + (day % 16)}`,
+                    oxygen: `${96 + (day % 4)}`
+                  },
+                  moodCondition: 'fair',
+                  appetiteCondition: 'good',
+                  sleepCondition: 'fair',
+                  activities: '朝の挨拶・声かけ、バイタル測定、入浴介助（一部介助）、昼食介助、園芸活動参加',
+                  medicationStatus: '朝：高血圧薬、糖尿病薬。夕：高血圧薬。全て正常に服薬。',
+                  specialNotes: '午前中は少し疲れた様子でしたが、午睡後は元気を回復。',
+                  concernsIssues: day % 9 === 0 ? '夜間の睡眠が浅いとのご本人からの訴えあり' : '',
+                  completed: true
+                }
+              ],
+              total_users: 5,
+              completed_reports: 2,
+              incompleted_reports: 3,
+              submitted: true,
+              submitted_at: `${dateStr} 18:00:00`,
+              created_at: `${dateStr} 18:00:00`,
+              updated_at: `${dateStr} 18:00:00`
+            })
+          }
+
+          // バッチ挿入
+          if (reportsToInsert.length > 0) {
+            for (const report of reportsToInsert) {
+              const { error } = await supabase
+                .from('daily_reports')
+                .insert([report])
+
+              if (error) {
+                console.error('挿入エラー:', error)
+              } else {
+                insertedCount++
+                setGeneratingProgress(prev => ({ ...prev, current: insertedCount }))
+              }
+            }
+          }
+
+          // 進捗表示（10件ごと）
+          if (insertedCount % 10 === 0) {
+            console.log(`進捗: ${insertedCount}件挿入完了`)
+          }
+        }
+      }
+
+      console.log('デモデータ生成完了:', insertedCount, '件')
+
+      // モニタリング記録と支援計画書を自動生成
+      console.log('モニタリング記録と支援計画書を生成中...')
+
+      const monitoringRecords = []
+      const supportPlans = []
+      const users = ['user1', 'user2', 'user3']
+      const userNames = ['田中 花子', '佐藤 一郎', '山田 美智子']
+
+      for (let i = 0; i < users.length; i++) {
+        // モニタリング記録
+        monitoringRecords.push({
+          id: `monitoring-${users[i]}-${Date.now()}`,
+          userId: users[i],
+          userName: userNames[i],
+          recordDate: new Date().toISOString().split('T')[0],
+          createdBy: '3',
+          createdByName: '山田花子',
+          createdAt: new Date(),
+          healthStatus: {
+            physical: {
+              mobility: '自立',
+              selfCare: '一部介助',
+              excretion: '自立',
+              eating: '一部介助',
+              notes: '全体的に良好な状態を維持しています。歩行は安定しており、転倒リスクは低いと評価されます。'
+            },
+            cognitive: {
+              memory: '良好',
+              orientation: '良好',
+              communication: '良好',
+              notes: '日常会話は問題なく、時間・場所・人物の見当識も保たれています。'
+            },
+            mentalStatus: {
+              mood: '安定',
+              motivation: '良好',
+              socialInteraction: '積極的',
+              notes: 'レクリエーション活動に積極的に参加され、他の利用者様との交流も良好です。'
+            }
+          },
+          serviceUsage: {
+            frequency: '週5日',
+            satisfaction: '満足',
+            concerns: ''
+          },
+          goalProgress: {
+            shortTermGoals: [
+              { goal: '食事の自立度向上', progress: '順調に進んでいます', achieved: false },
+              { goal: '社会参加の促進', progress: '達成しました', achieved: true }
+            ],
+            longTermGoals: [
+              { goal: '自立した生活の維持', progress: '継続中', achieved: false }
+            ]
+          },
+          familyFeedback: 'ご家族からは「最近表情が明るくなった」との前向きな評価をいただいています。',
+          nextSteps: '現在のサービス内容を継続しながら、さらなるQOL向上を目指します。',
+          overallAssessment: 'AI分析により、過去3ヶ月の日報データから総合的に良好な状態が確認されました。バイタルサインは安定しており、活動への参加意欲も高く維持されています。'
+        })
+
+        // 支援計画書
+        supportPlans.push({
+          id: `plan-${users[i]}-${Date.now()}`,
+          userId: users[i],
+          userName: userNames[i],
+          planPeriodStart: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
+          planPeriodEnd: new Date(new Date().setMonth(new Date().getMonth() + 5)).toISOString().split('T')[0],
+          createdBy: '3',
+          createdByName: '山田花子',
+          createdAt: new Date(),
+          basicInfo: {
+            careLevel: '要介護2',
+            disabilities: ['身体障害'],
+            medicalConditions: ['高血圧', '糖尿病'],
+            livingArrangement: '在宅',
+            familySupport: '週末は家族が来訪'
+          },
+          currentStatus: {
+            physicalHealth: 'バイタルサインは安定。歩行は見守りレベル。',
+            mentalHealth: '認知機能は良好。日常会話に問題なし。',
+            dailyLifeActivities: '食事・排泄は一部介助。入浴は全介助。',
+            socialParticipation: 'レクリエーション活動に積極的に参加。',
+            challenges: '長時間の歩行には疲労感あり。'
+          },
+          goals: {
+            longTerm: [
+              { goal: '在宅生活の継続と自立度の維持', targetDate: new Date(new Date().setMonth(new Date().getMonth() + 6)).toISOString().split('T')[0] }
+            ],
+            shortTerm: [
+              {
+                goal: '食事の自己摂取能力向上',
+                targetDate: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
+                approach: '見守りレベルでの食事介助を継続し、徐々に自立度を高める'
+              },
+              {
+                goal: '社会参加の促進',
+                targetDate: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
+                approach: 'レクリエーション活動への参加を通じて他者との交流機会を増やす'
+              }
+            ]
+          },
+          serviceContent: [
+            {
+              serviceType: 'デイサービス',
+              provider: 'シフトケア介護センター',
+              frequency: '週5日',
+              purpose: '日常生活支援・社会参加促進'
+            },
+            {
+              serviceType: '訪問介護',
+              provider: 'ヘルパーステーション',
+              frequency: '週3回',
+              purpose: '入浴介助・生活支援'
+            }
+          ],
+          roleAllocation: {
+            careManager: '山田花子',
+            serviceProvider: 'シフトケア介護センター',
+            familyRole: '週末の見守り・外出支援',
+            userRole: '日常生活動作の自己実施'
+          },
+          reviewSchedule: {
+            nextReviewDate: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0],
+            reviewFrequency: '3ヶ月ごと',
+            reviewMethod: 'モニタリング結果に基づく評価会議'
+          },
+          specialConsiderations: 'AI分析により、日報データから最適なケアプランを自動生成しました。ご本人の状態に合わせて随時見直しを行います。'
+        })
+      }
+
+      // LocalStorageに保存
+      localStorage.setItem('monitoringRecords', JSON.stringify(monitoringRecords))
+      localStorage.setItem('supportPlans', JSON.stringify(supportPlans))
+
+      console.log('モニタリング記録:', monitoringRecords.length, '件生成')
+      console.log('支援計画書:', supportPlans.length, '件生成')
+
+      // データを再取得
+      const { data, error } = await supabase
+        .from('daily_reports')
+        .select('*')
+        .order('report_date', { ascending: false })
+
+      if (!error && data) {
+        const formattedReports = data.map(report => ({
+          id: report.id,
+          date: report.report_date,
+          staffId: report.staff_id,
+          staffName: report.staff_name,
+          shiftType: report.shift_type as 'early' | 'day' | 'late' | 'night',
+          submittedAt: new Date(report.submitted_at),
+          basic: {
+            generalActivities: report.general_activities || '',
+            teamNotes: report.team_notes || ''
+          },
+          userReports: report.user_reports || [],
+          summary: {
+            totalUsers: report.total_users || 0,
+            completedReports: report.completed_reports || 0,
+            incompletedReports: report.incompleted_reports || 0
+          },
+          status: 'submitted'
+        }))
+        setReports(formattedReports)
+      }
+
+      alert(`✅ デモデータ生成完了\n\n日報: ${insertedCount}件\nモニタリング記録: ${monitoringRecords.length}件\n支援計画書: ${supportPlans.length}件\n\n🤖 AIが日報データを分析してモニタリング記録と支援計画書を自動生成しました。\n\nデモを開始できます。`)
+    } catch (error) {
+      console.error('デモデータ生成エラー:', error)
+      alert('デモデータの生成に失敗しました')
+    } finally {
+      setIsGenerating(false)
+      setGeneratingProgress({ current: 0, total: 0, month: 0 })
+    }
+  }
+
   // 統計情報の計算
   const stats = {
     totalReports: reports.length,
@@ -329,7 +868,50 @@ export default function ReportsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar userRole="admin" />
-      
+
+      {/* デモデータ生成中のオーバーレイ */}
+      {isGenerating && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="text-center">
+              <Database className="w-16 h-16 text-blue-600 mx-auto mb-4 animate-pulse" />
+              <h3 className="text-xl font-bold text-gray-900 mb-2">デモデータ生成中</h3>
+              <p className="text-gray-600 mb-6">
+                {generatingProgress.month}月のデータを生成しています...
+              </p>
+
+              {/* プログレスバー */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                  <span>{generatingProgress.current}件</span>
+                  <span>{generatingProgress.total}件</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${(generatingProgress.current / generatingProgress.total) * 100}%` }}
+                  ></div>
+                </div>
+                <p className="text-sm text-gray-500 mt-2">
+                  {Math.round((generatingProgress.current / generatingProgress.total) * 100)}% 完了
+                </p>
+              </div>
+
+              {/* アニメーション */}
+              <div className="flex justify-center space-x-2">
+                <div className="w-3 h-3 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-3 h-3 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-3 h-3 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+
+              <p className="text-sm text-gray-500 mt-6">
+                このウィンドウを閉じないでください
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* ヘッダー */}
         <div className="mb-6">
@@ -352,7 +934,21 @@ export default function ReportsPage() {
             </div>
             
             <div className="flex items-center space-x-3">
-              <button 
+              <button
+                onClick={handleInsertDemoData}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center btn-touch"
+              >
+                <Database className="w-4 h-4 mr-2" />
+                デモデータ挿入
+              </button>
+              <button
+                onClick={handleClearAllData}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center btn-touch"
+              >
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                全データクリア
+              </button>
+              <button
                 onClick={() => router.push('/monitoring')}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center btn-touch"
               >

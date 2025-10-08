@@ -240,17 +240,25 @@ export default function StaffDashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center">
                   <FileText className="w-6 h-6 text-amber-600 mr-3" />
-                  <h3 className="font-semibold text-gray-900">日報確認</h3>
+                  <h3 className="font-semibold text-gray-900">日報管理</h3>
                 </div>
-                <button
-                  onClick={() => router.push('/staff-reports')}
-                  className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1 rounded text-sm btn-touch"
-                >
-                  作成・確認
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => router.push('/staff-reports-view')}
+                    className="bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-1 rounded text-sm btn-touch border border-amber-200"
+                  >
+                    確認
+                  </button>
+                  <button
+                    onClick={() => router.push('/staff-reports')}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded text-sm btn-touch"
+                  >
+                    作成
+                  </button>
+                </div>
               </div>
               <p className="text-sm text-gray-600 mb-2">相談支援業務の日報を作成・確認できます</p>
-              <div className="text-xs text-gray-500">本日の日報: 未作成</div>
+              <div className="text-xs text-gray-500">提出済み日報を確認、または新しい日報を作成</div>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-blue-500">
@@ -259,12 +267,20 @@ export default function StaffDashboardPage() {
                   <Activity className="w-6 h-6 text-blue-600 mr-3" />
                   <h3 className="font-semibold text-gray-900">モニタリング記録</h3>
                 </div>
-                <button
-                  onClick={() => router.push('/monitoring')}
-                  className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded text-sm btn-touch"
-                >
-                  確認・作成
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => router.push('/staff-monitoring-view')}
+                    className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm btn-touch"
+                  >
+                    確認
+                  </button>
+                  <button
+                    onClick={() => router.push('/monitoring')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm btn-touch"
+                  >
+                    作成
+                  </button>
+                </div>
               </div>
               <p className="text-sm text-gray-600 mb-2">利用者のモニタリング記録を確認・作成できます</p>
               <div className="text-xs text-gray-500">今月のモニタリング: 2件完了</div>
@@ -276,12 +292,20 @@ export default function StaffDashboardPage() {
                   <BookOpen className="w-6 h-6 text-green-600 mr-3" />
                   <h3 className="font-semibold text-gray-900">支援計画書</h3>
                 </div>
-                <button
-                  onClick={() => router.push('/support-plan')}
-                  className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded text-sm btn-touch"
-                >
-                  確認・作成
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => router.push('/staff-support-plan-view')}
+                    className="bg-green-50 hover:bg-green-100 text-green-700 px-3 py-1 rounded text-sm btn-touch"
+                  >
+                    確認
+                  </button>
+                  <button
+                    onClick={() => router.push('/support-plan')}
+                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm btn-touch"
+                  >
+                    作成
+                  </button>
+                </div>
               </div>
               <p className="text-sm text-gray-600 mb-2">個別支援計画書を確認・作成できます</p>
               <div className="text-xs text-gray-500">更新予定: 2件あり</div>

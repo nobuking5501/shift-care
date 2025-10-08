@@ -132,6 +132,7 @@ function SupportPlanPageContent() {
   const [plan, setPlan] = useState<SupportPlan | null>(null)
   const [activeTab, setActiveTab] = useState('basic')
   const [showPreview, setShowPreview] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const userId = searchParams.get('userId')
@@ -362,19 +363,37 @@ function SupportPlanPageContent() {
   }, [userId, monitoringId])
 
   const handleSave = async () => {
-    if (!plan) return
+    if (!plan || !user) return
 
     setSaving(true)
     try {
-      // 実際の実装ではFirestoreに保存
+      // LocalStorageに保存
       const updatedPlan = {
         ...plan,
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        createdBy: plan.createdBy || user.uid,
+        createdByName: plan.createdByName || user.name,
+        createdAt: plan.createdAt || new Date()
       }
       setPlan(updatedPlan)
-      
-      await new Promise(resolve => setTimeout(resolve, 1000)) // デモ用遅延
-      
+
+      // 既存のデータを取得
+      const existingData = localStorage.getItem('supportPlans')
+      let plans = existingData ? JSON.parse(existingData) : []
+
+      // 既存計画書を更新または新規追加
+      const existingIndex = plans.findIndex((p: any) => p.id === updatedPlan.id)
+      if (existingIndex >= 0) {
+        plans[existingIndex] = updatedPlan
+      } else {
+        plans.push(updatedPlan)
+      }
+
+      // LocalStorageに保存
+      localStorage.setItem('supportPlans', JSON.stringify(plans))
+
+      await new Promise(resolve => setTimeout(resolve, 500)) // デモ用遅延
+
       alert('支援計画書を保存しました')
     } catch (error) {
       console.error('保存エラー:', error)
@@ -391,15 +410,180 @@ function SupportPlanPageContent() {
     try {
       // デモ用遅延
       await new Promise(resolve => setTimeout(resolve, 1000))
-      
+
       // プレビューモーダルを表示
       setShowPreview(true)
-      
+
     } catch (error) {
       console.error('プレビューエラー:', error)
       alert('プレビューの生成に失敗しました')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // AI生成デモ機能（モニタリング記録を基に支援計画書を自動生成）
+  const handleAIGenerate = async () => {
+    if (!plan) return
+
+    setIsGenerating(true)
+    try {
+      // デモ用：段階的なローディングメッセージ
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // 生成されたデータで更新（実際のアプリではClaude APIを呼び出す）
+      const enhancedAssessment = `【総合アセスメント結果】
+
+モニタリング記録および日報データの詳細分析に基づき、${plan.userName}様の現状を以下のように評価します。
+
+■ 身体機能評価
+現在の身体機能は年齢相応で、基本的なADL（日常生活動作）は概ね自立されています。歩行器を使用した移動は安定しており、転倒リスクへの適切な対策が実施されています。バイタルサインは安定範囲内で推移しており、健康管理は良好です。今後も定期的な機能訓練により、現在の身体機能の維持・向上が期待できます。
+
+■ 認知機能評価
+日常会話や簡単な判断については問題なく、施設内での生活にも適応されています。軽度の記憶力低下は見られますが、声かけやサポートにより日常生活は円滑に営まれています。レクリエーション活動への参加意欲も高く、認知機能の維持に向けた取り組みが効果的に機能しています。
+
+■ 社会性・コミュニケーション
+他の利用者様やスタッフとの交流は良好で、積極的に集団活動に参加されています。家族との関係も良好に維持されており、定期的な面会が実施されています。地域社会との繋がりを大切にされており、外出支援プログラムへの参加希望も表明されています。
+
+■ 精神的健康
+情緒は安定しており、施設生活にも満足されています。創作活動や音楽療法など、ご自身の興味のある活動に意欲的に取り組まれており、生活の質は良好に保たれています。ご家族のサポートも充実しており、心理的な安定が図られています。`
+
+      setPlan(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          assessmentSummary: {
+            ...prev.assessmentSummary,
+            overallAssessment: enhancedAssessment
+          },
+          supportGoals: {
+            primary: [
+              {
+                goal: '身体機能の維持・向上による自立生活の継続',
+                timeframe: '6か月',
+                measurableOutcomes: [
+                  '歩行距離100m以上の達成（現在50m）',
+                  '階段昇降時の手すり使用のみでの自立',
+                  '入浴動作の見守りレベルでの完遂',
+                  'バランス評価テストでの得点5点向上'
+                ],
+                methods: [
+                  '個別機能訓練プログラム（週3回、各30分）',
+                  '歩行訓練とバランス訓練の組み合わせ',
+                  '理学療法士による専門的指導',
+                  '日常生活での実践的トレーニング'
+                ]
+              },
+              {
+                goal: '社会参加活動の充実と生活の質の向上',
+                timeframe: '継続的',
+                measurableOutcomes: [
+                  '集団活動への参加頻度：週4回以上',
+                  '外出支援プログラムへの参加：月4回以上',
+                  '創作活動での作品制作：月2作品以上',
+                  '家族・友人との交流：月4回以上'
+                ],
+                methods: [
+                  '多様なレクリエーションプログラムの提供',
+                  '地域イベントへの参加支援',
+                  '趣味活動（手芸、音楽）の継続的サポート',
+                  '家族との連携強化と面会機会の確保'
+                ]
+              },
+              {
+                goal: '認知機能の維持と心理的安定の確保',
+                timeframe: '継続的',
+                measurableOutcomes: [
+                  '認知機能評価テストでの現状維持',
+                  '服薬管理の自立継続（声かけレベル）',
+                  '日常会話でのコミュニケーション能力の維持',
+                  '情緒の安定と生活満足度の維持'
+                ],
+                methods: [
+                  '認知症予防プログラムへの参加',
+                  '回想法や音楽療法の活用',
+                  '定期的な傾聴とコミュニケーション',
+                  '家族との協力による環境整備'
+                ]
+              }
+            ],
+            secondary: [
+              {
+                goal: '健康状態の安定維持と疾病管理',
+                timeframe: '継続的',
+                measurableOutcomes: [
+                  'バイタルサインの正常範囲維持率95%以上',
+                  '服薬遵守率100%の継続',
+                  '体重の適正範囲維持（±2kg以内）',
+                  '定期健康診断での異常所見なし'
+                ],
+                methods: [
+                  '毎日のバイタルチェックと記録',
+                  '看護師による健康管理と服薬指導',
+                  '栄養管理と適切な食事提供',
+                  '主治医との定期的な連携'
+                ]
+              },
+              {
+                goal: '安全な生活環境の維持とリスク管理',
+                timeframe: '継続的',
+                measurableOutcomes: [
+                  '転倒・事故発生件数：0件',
+                  '環境安全チェックリスト遵守率100%',
+                  '緊急時対応訓練の定期実施（月1回）',
+                  'リスク評価の定期更新（3か月毎）'
+                ],
+                methods: [
+                  '居室・共有スペースの安全確保',
+                  '転倒予防対策の徹底',
+                  '緊急時対応マニュアルの整備',
+                  'スタッフへの安全教育の実施'
+                ]
+              }
+            ]
+          },
+          serviceDetails: {
+            ...prev.serviceDetails,
+            specializedServices: [
+              ...prev.serviceDetails.specializedServices,
+              {
+                type: '心理カウンセリング',
+                provider: '臨床心理士',
+                frequency: '月2回',
+                purpose: '心理的安定の維持と生活満足度の向上',
+                expectedOutcome: 'ストレス軽減と精神的健康の維持'
+              },
+              {
+                type: '作業療法',
+                provider: '作業療法士',
+                frequency: '週2回',
+                purpose: '手指機能の維持と創作活動の支援',
+                expectedOutcome: '巧緻動作の維持と生活意欲の向上'
+              }
+            ]
+          },
+          qualityAssurance: {
+            ...prev.qualityAssurance,
+            improvementMechanisms: [
+              '月次カンファレンスでの多職種による評価と改善策検討',
+              '家族参加型のケア計画見直し会議の実施',
+              '利用者様の意見・要望の定期的な聴取',
+              '職員研修の実施による支援の質向上',
+              '外部評価・第三者評価の活用',
+              'PDCAサイクルに基づく継続的改善'
+            ]
+          },
+          updatedAt: new Date()
+        }
+      })
+
+      alert('AI生成が完了しました。モニタリング記録を基に詳細な支援計画書が作成されました。')
+
+    } catch (error) {
+      console.error('AI生成エラー:', error)
+      alert('AI生成に失敗しました')
+    } finally {
+      setIsGenerating(false)
     }
   }
 
@@ -456,7 +640,7 @@ function SupportPlanPageContent() {
     )
   }
 
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'staff')) {
     return null
   }
 
@@ -464,7 +648,7 @@ function SupportPlanPageContent() {
   if (!plan && !userId) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar userRole="admin" />
+        <Navbar userRole={user.role} />
         
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="mb-6">
@@ -543,7 +727,7 @@ function SupportPlanPageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar userRole="admin" />
+      <Navbar userRole={user.role} />
       
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* ヘッダー */}
@@ -585,7 +769,15 @@ function SupportPlanPageContent() {
             </div>
             
             <div className="flex items-center space-x-3">
-              <button 
+              <button
+                onClick={handleAIGenerate}
+                disabled={isGenerating}
+                className="px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg hover:from-orange-700 hover:to-red-700 disabled:from-gray-400 disabled:to-gray-400 flex items-center btn-touch shadow-lg"
+              >
+                <BookOpen className={`w-4 h-4 mr-2 ${isGenerating ? 'animate-pulse' : ''}`} />
+                {isGenerating ? 'AI作成中...' : 'AI自動作成'}
+              </button>
+              <button
                 onClick={handleSave}
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center btn-touch"
@@ -593,7 +785,7 @@ function SupportPlanPageContent() {
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? '保存中...' : '保存'}
               </button>
-              <button 
+              <button
                 onClick={handlePreview}
                 disabled={saving}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 flex items-center btn-touch"

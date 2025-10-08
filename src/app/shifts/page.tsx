@@ -34,10 +34,12 @@ export default function ShiftsPage() {
   const [autoGenerationEnabled, setAutoGenerationEnabled] = useState(false)
   const [lastGeneratedDate, setLastGeneratedDate] = useState<string | null>(null)
 
-  // 📅 統一された日付計算ロジック（現在月ベース）
+  // 📅 統一された日付計算ロジック（来月ベース - 休日希望は来月分を提出するため）
   const currentDate = new Date()
-  const currentYear = currentDate.getFullYear()
-  const currentMonth = currentDate.getMonth() + 1
+  const nextMonthDate = new Date(currentDate)
+  nextMonthDate.setMonth(nextMonthDate.getMonth() + 1)
+  const currentYear = nextMonthDate.getFullYear()
+  const currentMonth = nextMonthDate.getMonth() + 1
   const targetMonth = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`
 
   // 🚨 管理ページ日付計算確認ログ
@@ -756,13 +758,48 @@ export default function ShiftsPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    if (window.confirm('すべてのシフトデータをクリアしますか？\nこの操作は取り消せません。')) {
+                    if (window.confirm('⚠️ シフト管理の全データをクリアします\n\n以下のデータが削除されます：\n• 生成済みシフト（全月）\n• 休日希望（全月）\n\nこの操作は取り消せません。\n本当に実行しますか？')) {
                       try {
-                        // Clear from Supabase for all months
+                        let shiftCount = 0
+                        let requestCount = 0
+
+                        // 1. Clear generated shifts from Supabase
                         await clearShifts('') // Empty string clears all
-                        // Clear from localStorage as backup
                         clearAllShifts()
-                        alert('すべてのシフトデータをクリアしました')
+                        shiftCount = shiftData.length
+
+                        // 2. Clear holiday requests from Supabase
+                        const { createClient } = await import('@supabase/supabase-js')
+                        const supabase = createClient(
+                          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                        )
+
+                        const { data: allRequests, error: fetchError } = await supabase
+                          .from('shift_requests')
+                          .select('id')
+
+                        if (!fetchError && allRequests && allRequests.length > 0) {
+                          for (const request of allRequests) {
+                            const { error: deleteError } = await supabase
+                              .from('shift_requests')
+                              .delete()
+                              .eq('id', request.id)
+
+                            if (!deleteError) {
+                              requestCount++
+                            }
+                          }
+                        }
+
+                        // 3. Clear LocalStorage
+                        localStorage.removeItem('shifts')
+                        localStorage.removeItem('shiftGenerationCompleted')
+
+                        alert(`✅ シフト管理データをクリアしました\n\n生成済みシフト: ${shiftCount}件\n休日希望: ${requestCount}件\n\n新しいデモを開始できます。`)
+
+                        // Refresh page to reflect changes
+                        window.location.reload()
                       } catch (error) {
                         console.error('Clear all failed:', error)
                         alert('クリア中にエラーが発生しました')

@@ -145,6 +145,7 @@ function MonitoringPageContent() {
   const [record, setRecord] = useState<MonitoringRecord | null>(null)
   const [activeTab, setActiveTab] = useState('basic')
   const [showPreview, setShowPreview] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const userId = searchParams.get('userId')
@@ -328,19 +329,37 @@ function MonitoringPageContent() {
   }, [userId])
 
   const handleSave = async () => {
-    if (!record) return
+    if (!record || !user) return
 
     setSaving(true)
     try {
-      // 実際の実装ではFirestoreに保存
+      // LocalStorageに保存
       const updatedRecord = {
         ...record,
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        createdBy: record.createdBy || user.uid,
+        createdByName: record.createdByName || user.name,
+        createdAt: record.createdAt || new Date()
       }
       setRecord(updatedRecord)
-      
-      await new Promise(resolve => setTimeout(resolve, 1000)) // デモ用遅延
-      
+
+      // 既存のデータを取得
+      const existingData = localStorage.getItem('monitoringRecords')
+      let records = existingData ? JSON.parse(existingData) : []
+
+      // 既存レコードを更新または新規追加
+      const existingIndex = records.findIndex((r: any) => r.id === updatedRecord.id)
+      if (existingIndex >= 0) {
+        records[existingIndex] = updatedRecord
+      } else {
+        records.push(updatedRecord)
+      }
+
+      // LocalStorageに保存
+      localStorage.setItem('monitoringRecords', JSON.stringify(records))
+
+      await new Promise(resolve => setTimeout(resolve, 500)) // デモ用遅延
+
       alert('モニタリング記録を保存しました')
     } catch (error) {
       console.error('保存エラー:', error)
@@ -357,15 +376,96 @@ function MonitoringPageContent() {
     try {
       // デモ用遅延
       await new Promise(resolve => setTimeout(resolve, 1000))
-      
+
       // プレビューモーダルを表示
       setShowPreview(true)
-      
+
     } catch (error) {
       console.error('プレビューエラー:', error)
       alert('プレビューの生成に失敗しました')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // AI生成デモ機能（日報データを基にモニタリング記録を自動生成）
+  const handleAIGenerate = async () => {
+    if (!record) return
+
+    setIsGenerating(true)
+    try {
+      // デモ用：段階的なローディングメッセージ
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      // 生成されたデータで更新（実際のアプリではClaude APIを呼び出す）
+      const enhancedNotes = `過去3ヶ月間の日報データを分析した結果、${record.userName}様は全体的に良好な状態を維持されています。
+
+【身体機能】
+バイタルサインは安定しており、血圧・脈拍・体温ともに正常範囲内で推移しています。体重は微減傾向ですが、食事摂取量は良好で栄養状態に問題はありません。入浴介助時の身体状況も安定しており、転倒リスクへの対策も適切に実施されています。
+
+【認知・精神面】
+日常会話は問題なく、他の利用者様やスタッフとのコミュニケーションも良好です。レクリエーション活動への参加意欲が高く、特に音楽療法や手芸活動で積極的な姿勢が見られます。記憶力の軽度低下は見られますが、日常生活に大きな支障はありません。
+
+【社会参加】
+集団活動への参加頻度が高く、他の利用者様との交流も活発です。家族との面会も定期的に行われており、良好な関係が維持されています。外出支援プログラムへの参加希望もあり、地域社会との繋がりを大切にされています。
+
+【服薬管理】
+定時薬の服薬遵守率は100%で、声かけによる自己管理ができています。血圧薬の減量調整後も血圧は安定しており、主治医との連携も適切に行われています。
+
+【今後の支援方針】
+現在の支援内容は適切であり、継続することが望ましいです。外出支援の頻度を増やすことで、さらなる社会参加促進が期待できます。また、身体機能維持のため、機能訓練プログラムの継続も重要です。`
+
+      setRecord(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          healthStatus: {
+            ...prev.healthStatus,
+            mentalStatus: {
+              ...prev.healthStatus.mentalStatus,
+              notes: enhancedNotes
+            }
+          },
+          serviceEvaluation: {
+            ...prev.serviceEvaluation,
+            goalAchievement: {
+              shortTermProgress: 'achieved',
+              longTermProgress: 'progressing',
+              notes: '短期目標は概ね達成されています。日常生活動作の自立度は維持されており、社会参加活動も継続的に行われています。今後も現在の支援レベルを継続しながら、新たな目標設定を検討することが適切です。'
+            },
+            serviceQuality: {
+              userSatisfaction: 'satisfied',
+              familySatisfaction: 'very_satisfied',
+              staffAssessment: 'good',
+              notes: '利用者様、ご家族ともにサービス内容に満足されています。スタッフとの信頼関係も良好で、安心して施設をご利用いただいています。今後もこの良好な関係を維持し、質の高いサービス提供を継続します。'
+            },
+            recommendations: {
+              serviceContinuation: 'continue',
+              proposedChanges: [
+                '外出支援プログラムの頻度を週1回から週2回に増加',
+                '機能訓練にバランス訓練を追加',
+                '家族との連携をさらに強化（月次報告会の実施）'
+              ],
+              priorityAreas: [
+                '身体機能の維持・向上',
+                '社会参加機会の拡大',
+                '認知機能の維持',
+                '家族との良好な関係継続'
+              ],
+              notes: '現在の支援方針は適切です。利用者様の意欲を尊重しながら、外出支援の充実と機能訓練の継続を推奨します。'
+            }
+          },
+          updatedAt: new Date()
+        }
+      })
+
+      alert('AI分析が完了しました。日報データを基に詳細なモニタリング記録が生成されました。')
+
+    } catch (error) {
+      console.error('AI生成エラー:', error)
+      alert('AI生成に失敗しました')
+    } finally {
+      setIsGenerating(false)
     }
   }
 
@@ -441,7 +541,7 @@ function MonitoringPageContent() {
     )
   }
 
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'staff')) {
     return null
   }
 
@@ -449,7 +549,7 @@ function MonitoringPageContent() {
   if (!record && !userId) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar userRole="admin" />
+        <Navbar userRole={user.role} />
         
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="mb-6">
@@ -528,7 +628,7 @@ function MonitoringPageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar userRole="admin" />
+      <Navbar userRole={user.role} />
       
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* ヘッダー */}
@@ -565,7 +665,15 @@ function MonitoringPageContent() {
             </div>
             
             <div className="flex items-center space-x-3">
-              <button 
+              <button
+                onClick={handleAIGenerate}
+                disabled={isGenerating}
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:from-gray-400 disabled:to-gray-400 flex items-center btn-touch shadow-lg"
+              >
+                <Activity className={`w-4 h-4 mr-2 ${isGenerating ? 'animate-pulse' : ''}`} />
+                {isGenerating ? 'AI分析中...' : 'AI自動生成'}
+              </button>
+              <button
                 onClick={handleSave}
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center btn-touch"
@@ -573,7 +681,7 @@ function MonitoringPageContent() {
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? '保存中...' : '保存'}
               </button>
-              <button 
+              <button
                 onClick={handlePreview}
                 disabled={saving}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 flex items-center btn-touch"
@@ -581,7 +689,7 @@ function MonitoringPageContent() {
                 <Eye className="w-4 h-4 mr-2" />
                 {saving ? 'プレビュー生成中...' : 'プレビュー'}
               </button>
-              <button 
+              <button
                 onClick={() => router.push(`/support-plan?userId=${record.userId}&monitoringId=${record.id}`)}
                 className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center btn-touch"
               >

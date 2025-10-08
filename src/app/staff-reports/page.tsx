@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { onAuthStateChange, getCurrentDemoUser } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 import Navbar from '@/components/layout/Navbar'
-import { 
+import {
   FileText,
   Save,
   Calendar,
@@ -22,7 +23,8 @@ import {
   Thermometer,
   Droplets,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Sparkles
 } from 'lucide-react'
 
 // 利用者データの型定義
@@ -56,12 +58,16 @@ interface UserDailyReport {
   completed: boolean
 }
 
-export default function StaffReportsPage() {
+function StaffReportsPageContent() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editingReportId, setEditingReportId] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get('id')
 
   // 基本フォームデータ
   const [basicFormData, setBasicFormData] = useState({
@@ -142,35 +148,86 @@ export default function StaffReportsPage() {
     return () => unsubscribe()
   }, [router])
 
-  // 初期値設定
+  // 編集モード時にデータを読み込む
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0]
-    setBasicFormData(prev => ({
-      ...prev,
-      date: today
-    }))
+    const loadEditData = async () => {
+      if (!editId || !user) return
 
-    // 利用者別日報の初期化
-    const initialReports = serviceUsers.map(user => ({
-      userId: user.id,
-      userName: user.name,
-      vitalSigns: {},
-      moodCondition: 'good' as const,
-      appetiteCondition: 'good' as const,
-      sleepCondition: 'good' as const,
-      activities: '',
-      medicationStatus: '',
-      specialNotes: '',
-      concernsIssues: '',
-      completed: false
-    }))
-    setUserReports(initialReports)
+      try {
+        const { data, error } = await supabase
+          .from('daily_reports')
+          .select('*')
+          .eq('id', editId)
+          .eq('staff_id', user.uid) // 自分の日報のみ編集可能
+          .single()
 
-    // 最初の利用者を展開状態にする
-    if (serviceUsers.length > 0) {
-      setExpandedUsers(new Set([serviceUsers[0].id]))
+        if (error) {
+          console.error('日報読み込みエラー:', error)
+          alert('日報の読み込みに失敗しました')
+          router.push('/staff-reports-view')
+          return
+        }
+
+        if (data) {
+          // 編集モードに設定
+          setEditMode(true)
+          setEditingReportId(data.id)
+
+          // 基本情報を設定
+          setBasicFormData({
+            date: data.report_date,
+            shiftType: data.shift_type,
+            generalActivities: data.general_activities || '',
+            teamNotes: data.team_notes || '',
+            improvements: ''
+          })
+
+          // 利用者別レポートを設定
+          if (data.user_reports && Array.isArray(data.user_reports)) {
+            setUserReports(data.user_reports)
+          }
+
+          console.log('編集用データを読み込みました:', data)
+        }
+      } catch (error) {
+        console.error('データ読み込みエラー:', error)
+        alert('データの読み込みに失敗しました')
+        router.push('/staff-reports-view')
+      }
     }
-  }, [])
+
+    if (editId && user) {
+      loadEditData()
+    } else {
+      // 新規作成モード
+      const today = new Date().toISOString().split('T')[0]
+      setBasicFormData(prev => ({
+        ...prev,
+        date: today
+      }))
+
+      // 利用者別日報の初期化
+      const initialReports = serviceUsers.map(user => ({
+        userId: user.id,
+        userName: user.name,
+        vitalSigns: {},
+        moodCondition: 'good' as const,
+        appetiteCondition: 'good' as const,
+        sleepCondition: 'good' as const,
+        activities: '',
+        medicationStatus: '',
+        specialNotes: '',
+        concernsIssues: '',
+        completed: false
+      }))
+      setUserReports(initialReports)
+
+      // 最初の利用者を展開状態にする
+      if (serviceUsers.length > 0) {
+        setExpandedUsers(new Set([serviceUsers[0].id]))
+      }
+    }
+  }, [editId, user, router])
 
   // 基本フォーム入力更新
   const updateBasicFormData = (field: string, value: any) => {
@@ -223,9 +280,99 @@ export default function StaffReportsPage() {
 
   // 利用者日報の完了切り替え
   const toggleUserReportCompletion = (userId: string) => {
-    setUserReports(prev => prev.map(report => 
-      report.userId === userId 
+    setUserReports(prev => prev.map(report =>
+      report.userId === userId
         ? { ...report, completed: !report.completed }
+        : report
+    ))
+  }
+
+  // 基本情報のサンプルデータ自動入力機能
+  const fillBasicSampleData = () => {
+    const sampleGeneralActivities = [
+      '朝の申し送り、全体バイタルチェック、集団レクリエーション（音楽療法）実施、昼食準備・配膳・介助、午後の個別ケア対応、おやつ提供、夕方の見守り・記録作成',
+      '早朝バイタル測定、朝食準備・食事介助、入浴介助（3名）、機能訓練プログラム実施、昼食対応、午後のレクリエーション（手芸）、記録整理・申し送り',
+      '施設内環境整備、利用者様のバイタルチェック、リハビリテーション支援、食事介助（朝・昼・夕）、服薬管理、園芸活動支援、夕方の申し送りミーティング',
+      'モーニングケア全般、バイタル測定と記録、入浴支援、食事介助、午後の創作活動（折り紙・塗り絵）、おやつ時間、水分補給声かけ、記録作成',
+      '朝の健康チェック、身支度支援、朝食対応、散歩同行（5名）、昼食準備・介助、午睡見守り、レクリエーション（カラオケ）、夕方の環境整備と記録'
+    ]
+
+    const sampleTeamNotes = [
+      '新規利用者様が来週から利用開始予定。受け入れ準備を進めています。',
+      '車椅子の定期点検を実施しました。1台修理が必要なため業者に連絡済み。',
+      '季節の行事（お花見）の企画について、次回ミーティングで検討予定です。',
+      '感染症予防のため、手洗い・消毒の徹底を継続中。スタッフ間で情報共有しています。',
+      ''
+    ]
+
+    const randomIndex = Math.floor(Math.random() * sampleGeneralActivities.length)
+
+    setBasicFormData(prev => ({
+      ...prev,
+      generalActivities: sampleGeneralActivities[randomIndex],
+      teamNotes: sampleTeamNotes[randomIndex]
+    }))
+  }
+
+  // 利用者別サンプルデータ自動入力機能
+  const fillSampleData = (userId: string) => {
+    const sampleActivities = [
+      '朝の申し送り参加、バイタルチェック実施、入浴介助（見守り）、昼食介助（一部介助）、レクリエーション参加（音楽療法）、おやつ提供、夕方の見守り',
+      'バイタル測定、モーニングケア、リハビリテーション参加（歩行訓練）、昼食準備・配膳、午後の創作活動（折り紙）、排泄介助、水分補給声かけ',
+      '起床介助、身支度支援、朝食介助、服薬確認、散歩同行（施設内）、昼食準備、午睡見守り、おやつ提供、談話・傾聴',
+      'バイタルチェック、整容介助、リハビリ体操参加、食事介助（見守り）、口腔ケア、レクリエーション参加（手芸）、水分摂取促し、記録作成',
+      '朝の挨拶・声かけ、バイタル測定、入浴介助（一部介助）、昼食介助、服薬管理、園芸活動参加、おやつ時間、夕方の申し送り準備'
+    ]
+
+    const sampleMedications = [
+      '朝・昼・夕の定時薬3錠ずつ。声かけにて正常に服薬。飲み忘れなし。',
+      '朝食後：降圧剤1錠、血糖降下剤1錠。昼食後：なし。夕食後：降圧剤1錠。全て服薬確認済み。',
+      '朝：高血圧薬、糖尿病薬。昼：なし。夕：高血圧薬。就寝前：睡眠導入剤（医師指示）。全て正常に服薬。',
+      '定時薬：朝2錠、昼1錠、夕2錠。服薬カレンダーで管理。声かけにより自己服薬できた。',
+      '処方薬5種類を1日3回に分けて服薬。セットされた薬を確認しながら服薬。問題なし。'
+    ]
+
+    const sampleSpecialNotes = [
+      '今日は表情が明るく、積極的に活動に参加されていました。食事摂取量も良好です。',
+      'レクリエーション活動で他の利用者様との交流が活発でした。笑顔が多く見られました。',
+      '午前中は少し疲れた様子でしたが、午睡後は元気を回復。おやつを美味しそうに召し上がっていました。',
+      'リハビリに意欲的に取り組まれていました。歩行器での移動も安定しています。',
+      '手芸活動で素敵な作品を完成され、とても喜ばれていました。創作意欲が高まっています。'
+    ]
+
+    const sampleConcerns = [
+      '',
+      '少し食欲が落ちているため経過観察が必要。水分摂取量にも注意。',
+      '',
+      '夜間の睡眠が浅いとのご本人からの訴えあり。様子観察継続。',
+      ''
+    ]
+
+    const randomIndex = Math.floor(Math.random() * sampleActivities.length)
+    const randomTemp = (36.2 + Math.random() * 0.6).toFixed(1)
+    const randomBP = `${120 + Math.floor(Math.random() * 20)}/${70 + Math.floor(Math.random() * 15)}`
+    const randomPulse = (65 + Math.floor(Math.random() * 20)).toString()
+    const randomOxygen = (96 + Math.floor(Math.random() * 4)).toString()
+
+    setUserReports(prev => prev.map(report =>
+      report.userId === userId
+        ? {
+            ...report,
+            vitalSigns: {
+              temperature: randomTemp,
+              bloodPressure: randomBP,
+              pulse: randomPulse,
+              oxygen: randomOxygen
+            },
+            moodCondition: 'good' as const,
+            appetiteCondition: 'good' as const,
+            sleepCondition: 'good' as const,
+            activities: sampleActivities[randomIndex],
+            medicationStatus: sampleMedications[randomIndex],
+            specialNotes: sampleSpecialNotes[randomIndex],
+            concernsIssues: sampleConcerns[randomIndex],
+            completed: false
+          }
         : report
     ))
   }
@@ -261,41 +408,86 @@ export default function StaffReportsPage() {
     try {
       const currentUser = getCurrentDemoUser()
       const completeReports = userReports.filter(report => report.completed)
-      
-      const reportData = {
-        basic: {
-          ...basicFormData,
-          date: new Date(basicFormData.date),
-          userId: currentUser?.uid || 'unknown',
-          staffName: currentUser?.displayName || 'Unknown Staff'
-        },
-        userReports: completeReports,
-        summary: {
-          totalUsers: serviceUsers.length,
-          completedReports: completeReports.length,
-          incompletedReports: userReports.length - completeReports.length
-        },
-        submitted: true,
-        submittedAt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date()
+
+      if (editMode && editingReportId) {
+        // 更新モード
+        const updateData = {
+          report_date: basicFormData.date,
+          shift_type: basicFormData.shiftType,
+          general_activities: basicFormData.generalActivities,
+          team_notes: basicFormData.teamNotes,
+          user_reports: completeReports,
+          total_users: serviceUsers.length,
+          completed_reports: completeReports.length,
+          incompleted_reports: userReports.length - completeReports.length,
+          updated_at: new Date().toISOString()
+        }
+
+        console.log('日報データを更新:', updateData)
+
+        const { data, error } = await supabase
+          .from('daily_reports')
+          .update(updateData)
+          .eq('id', editingReportId)
+          .select()
+
+        if (error) {
+          console.error('Supabase更新エラー:', error)
+          throw error
+        }
+
+        console.log('更新成功:', data)
+        alert('日報を更新しました')
+
+        // 日報確認画面に戻る
+        setTimeout(() => {
+          router.push('/staff-reports-view')
+        }, 1000)
+
+      } else {
+        // 新規作成モード
+        const reportData = {
+          report_date: basicFormData.date,
+          shift_type: basicFormData.shiftType,
+          staff_id: currentUser?.uid || 'unknown',
+          staff_name: currentUser?.displayName || 'Unknown Staff',
+          weather: '',
+          temperature: '',
+          general_activities: basicFormData.generalActivities,
+          team_notes: basicFormData.teamNotes,
+          user_reports: completeReports,
+          total_users: serviceUsers.length,
+          completed_reports: completeReports.length,
+          incompleted_reports: userReports.length - completeReports.length,
+          submitted: true,
+          submitted_at: new Date().toISOString()
+        }
+
+        console.log('日報データをSupabaseに保存:', reportData)
+
+        const { data, error } = await supabase
+          .from('daily_reports')
+          .insert([reportData])
+          .select()
+
+        if (error) {
+          console.error('Supabase保存エラー:', error)
+          throw error
+        }
+
+        console.log('保存成功:', data)
+
+        setSaved(true)
+
+        // 3秒後にスタッフダッシュボードに戻る
+        setTimeout(() => {
+          router.push('/staff-dashboard')
+        }, 3000)
       }
 
-      console.log('日報データ:', reportData)
-
-      // デモ用遅延
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      setSaved(true)
-      
-      // 3秒後にスタッフダッシュボードに戻る
-      setTimeout(() => {
-        router.push('/staff-dashboard')
-      }, 3000)
-      
     } catch (error) {
       console.error('日報送信エラー:', error)
-      alert('日報の保存に失敗しました')
+      alert('日報の保存に失敗しました: ' + (error as Error).message)
     } finally {
       setSaving(false)
     }
@@ -415,10 +607,10 @@ export default function StaffReportsPage() {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
-                  利用者別日報入力
+                  {editMode ? '日報編集' : '利用者別日報入力'}
                 </h1>
                 <p className="text-gray-600">
-                  各利用者様の状況を個別に記録してください
+                  {editMode ? '日報の内容を修正できます' : '各利用者様の状況を個別に記録してください'}
                 </p>
               </div>
             </div>
@@ -452,10 +644,19 @@ export default function StaffReportsPage() {
         {/* 基本情報セクション */}
         <div className="bg-white rounded-lg shadow-sm mb-6">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-              <FileText className="w-5 h-5 mr-2" />
-              基本情報
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                <FileText className="w-5 h-5 mr-2" />
+                基本情報
+              </h2>
+              <button
+                onClick={fillBasicSampleData}
+                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center text-sm btn-touch"
+              >
+                <Sparkles className="w-4 h-4 mr-1" />
+                サンプル入力
+              </button>
+            </div>
           </div>
           <div className="p-6">
             <div className="grid md:grid-cols-2 gap-6">
@@ -578,8 +779,15 @@ export default function StaffReportsPage() {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => fillSampleData(serviceUser.id)}
+                          className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center text-sm btn-touch"
+                        >
+                          <Sparkles className="w-4 h-4 mr-1" />
+                          サンプル入力
+                        </button>
                         <label className="flex items-center space-x-2">
                           <input
                             type="checkbox"
@@ -781,7 +989,10 @@ export default function StaffReportsPage() {
               className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-3 px-6 rounded-lg font-medium flex items-center justify-center btn-touch"
             >
               <Save className="w-4 h-4 mr-2" />
-              {saving ? '提出中...' : `日報を提出 (${userReports.filter(r => r.completed).length}名分)`}
+              {saving
+                ? (editMode ? '更新中...' : '提出中...')
+                : (editMode ? `日報を更新 (${userReports.filter(r => r.completed).length}名分)` : `日報を提出 (${userReports.filter(r => r.completed).length}名分)`)
+              }
             </button>
           </div>
         </div>
@@ -804,5 +1015,17 @@ export default function StaffReportsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function StaffReportsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    }>
+      <StaffReportsPageContent />
+    </Suspense>
   )
 }

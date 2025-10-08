@@ -31,10 +31,12 @@ export default function StaffShiftsPage() {
   const [activeTab, setActiveTab] = useState('shifts') // 'shifts' or 'requests'
   const router = useRouter()
 
-  // 📅 管理ページと完全同期: 統一された日付計算ロジック
+  // 📅 管理ページと完全同期: 統一された日付計算ロジック（来月ベース）
   const baseDate = new Date()
-  const targetYear = baseDate.getFullYear()
-  const targetMonthNum = baseDate.getMonth() + 1
+  const nextMonthDate = new Date(baseDate)
+  nextMonthDate.setMonth(nextMonthDate.getMonth() + 1)
+  const targetYear = nextMonthDate.getFullYear()
+  const targetMonthNum = nextMonthDate.getMonth() + 1
   const targetMonth = `${targetYear}-${targetMonthNum.toString().padStart(2, '0')}`
 
   // カレンダー表示用も同じ日付を使用
@@ -307,7 +309,9 @@ export default function StaffShiftsPage() {
 
   // 自分の休日希望をフィルタリング
   const myHolidayRequests = holidayRequests.filter(req =>
-    req.staff_user_id === safeUser.id || req.staff_user_id === 'demo-staff'
+    req.staff_user_id === safeUser.id ||
+    req.staff_user_id === safeUser.uid ||
+    req.staff_user_id === 'demo-staff'
   )
 
   // 休日希望を削除する処理
@@ -540,7 +544,7 @@ export default function StaffShiftsPage() {
             {/* シフト詳細リスト */}
             <div className="mt-6 bg-white rounded-lg shadow-sm">
               <div className="p-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">今月のシフト詳細</h3>
+                <h3 className="text-lg font-semibold text-gray-900">来月のシフト詳細</h3>
                 <p className="text-sm text-gray-600 mt-1">対象月: {targetYear}年{targetMonthNum}月</p>
               </div>
               <div className="divide-y divide-gray-200">
@@ -553,7 +557,7 @@ export default function StaffShiftsPage() {
                   <div className="p-6 text-center">
                     <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <h4 className="text-lg font-medium text-gray-900 mb-2">シフトデータがありません</h4>
-                    <p className="text-gray-600 mb-4">まだ{targetYear}年{targetMonthNum}月のシフトが生成されていません</p>
+                    <p className="text-gray-600 mb-4">まだ{targetYear}年{targetMonthNum}月（来月）のシフトが生成されていません</p>
                   </div>
                 ) : (
                   shifts.slice(0, 10).map((shift, index) => (
