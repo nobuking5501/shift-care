@@ -826,7 +826,7 @@ export default function ReportsPage() {
             completedReports: report.completed_reports || 0,
             incompletedReports: report.incompleted_reports || 0
           },
-          status: 'submitted'
+          status: 'submitted' as const
         }))
         setReports(formattedReports)
       }
