@@ -118,6 +118,8 @@ interface SupportPlan {
   }
   createdAt: Date
   updatedAt: Date
+  createdBy?: string
+  createdByName?: string
   submittedAt?: Date
   status: 'draft' | 'completed' | 'submitted'
   approvedBy?: string
